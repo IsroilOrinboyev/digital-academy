@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { CourseListing } from './pages/CourseListing';
@@ -14,6 +14,8 @@ import StudentDashboard from './pages/dashboard/StudentDashboard';
 import InstructorDashboard from './pages/instructor/InstructorDashboard';
 import Learn from './pages/Learn';
 import Search from './pages/Search';
+import Profile from './pages/Profile';
+import Help from './pages/Help';
 
 export const router = createBrowserRouter([
   // Standalone pages (no Layout)
@@ -71,12 +73,9 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // Legacy /dashboard → redirect to /profile
         path: 'dashboard',
-        element: (
-          <ProtectedRoute>
-            <StudentDashboard />
-          </ProtectedRoute>
-        ),
+        element: <Navigate to="/profile" replace />,
       },
       {
         path: 'instructor',
@@ -85,6 +84,18 @@ export const router = createBrowserRouter([
             <InstructorDashboard />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: 'profile',
+        element: (
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'help',
+        Component: Help,
       },
       {
         path: '*',

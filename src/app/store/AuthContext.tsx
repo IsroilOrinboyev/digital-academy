@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, Notification, Transaction } from '@/app/types';
+import { authApi, setTokens, clearTokens } from '@/app/services/api';
 
 interface AuthContextType extends AuthState {
+  apiAvailable: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginAsDemo: (role: 'student' | 'instructor') => void;
   register: (name: string, email: string, password: string, role: 'student' | 'instructor') => Promise<void>;
@@ -20,88 +22,83 @@ const STORAGE_KEY = 'digital_academy_auth';
 const NOTIF_KEY = 'digital_academy_notifications';
 const TX_KEY = 'digital_academy_transactions';
 
-function loadAuth(): AuthState {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return { user: null, isAuthenticated: false };
-}
-
-function loadNotifications(): Notification[] {
-  try {
-    const stored = localStorage.getItem(NOTIF_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return [];
-}
-
-function loadTransactions(): Transaction[] {
-  try {
-    const stored = localStorage.getItem(TX_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return [];
+function load<T>(key: string, fallback: T): T {
+  try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AuthState>(loadAuth);
-  const [notifications, setNotifications] = useState<Notification[]>(loadNotifications);
-  const [transactions, setTransactions] = useState<Transaction[]>(loadTransactions);
+  const [state, setState] = useState<AuthState>(() => load(STORAGE_KEY, { user: null, isAuthenticated: false }));
+  const [notifications, setNotifications] = useState<Notification[]>(() => load(NOTIF_KEY, []));
+  const [transactions, setTransactions] = useState<Transaction[]>(() => load(TX_KEY, []));
+  const [apiAvailable, setApiAvailable] = useState(false);
 
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
+  useEffect(() => { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications)); }, [notifications]);
+  useEffect(() => { localStorage.setItem(TX_KEY, JSON.stringify(transactions)); }, [transactions]);
+
+  // Check if API is reachable on mount
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+    fetch(`${BASE_URL}/api/health/`, { signal: AbortSignal.timeout(2000) })
+      .then(() => setApiAvailable(true))
+      .catch(() => setApiAvailable(false));
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications));
-  }, [notifications]);
-
-  useEffect(() => {
-    localStorage.setItem(TX_KEY, JSON.stringify(transactions));
-  }, [transactions]);
-
-  const login = async (email: string, _password: string) => {
-    const stored = localStorage.getItem('da_users');
-    const users: User[] = stored ? JSON.parse(stored) : [];
-    let user = users.find(u => u.email === email);
-    if (!user) {
-      user = {
-        id: crypto.randomUUID(),
-        name: email.split('@')[0],
-        email,
-        role: 'student',
-        enrolledCourseIds: [],
-        createdAt: new Date().toISOString(),
-      };
-      users.push(user);
-      localStorage.setItem('da_users', JSON.stringify(users));
-    }
-    setState({ user, isAuthenticated: true });
+  const seedNotifications = (name: string, dest: string) => {
     setNotifications([
-      { id: '1', message: 'Welcome back to Digital Academy!', read: false, createdAt: new Date().toISOString(), link: '/dashboard' },
-      { id: '2', message: 'New courses added in Web Development', read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), link: '/courses' },
-      { id: '3', message: 'Complete your profile to get personalized recommendations', read: true, createdAt: new Date(Date.now() - 172800000).toISOString(), link: '/dashboard' },
+      { id: 'n1', message: `Welcome back, ${name}!`, read: false, createdAt: new Date().toISOString(), link: dest },
+      { id: 'n2', message: 'New courses added in Web Development', read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), link: '/courses' },
+      { id: 'n3', message: 'Complete your profile to get personalized recommendations', read: true, createdAt: new Date(Date.now() - 172800000).toISOString(), link: '/profile' },
     ]);
   };
 
-  const register = async (name: string, email: string, _password: string, role: 'student' | 'instructor') => {
-    const user: User = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      role,
-      enrolledCourseIds: [],
-      createdAt: new Date().toISOString(),
-    };
-    const stored = localStorage.getItem('da_users');
-    const users: User[] = stored ? JSON.parse(stored) : [];
-    users.push(user);
-    localStorage.setItem('da_users', JSON.stringify(users));
-    setState({ user, isAuthenticated: true });
-    setNotifications([
-      { id: '1', message: `Welcome to Digital Academy, ${name}!`, read: false, createdAt: new Date().toISOString(), link: '/dashboard' },
-    ]);
+  const login = async (email: string, password: string) => {
+    try {
+      const data = await authApi.login(email, password);
+      setTokens(data.access, data.refresh);
+      const u: User = {
+        id: data.user.id ?? data.user.pk ?? String(Date.now()),
+        name: data.user.full_name ?? data.user.name ?? email.split('@')[0],
+        email: data.user.email,
+        role: data.user.role ?? 'student',
+        bio: data.user.bio,
+        avatar: data.user.avatar,
+        enrolledCourseIds: data.user.enrolled_course_ids ?? [],
+        createdAt: data.user.date_joined ?? new Date().toISOString(),
+      };
+      setState({ user: u, isAuthenticated: true });
+      seedNotifications(u.name, '/dashboard');
+      setApiAvailable(true);
+    } catch (err: any) {
+      if (err.message === 'UNAUTHORIZED' || err.message?.includes('credentials')) throw err;
+      // API unreachable — fall back to local user store
+      const users: User[] = load('da_users', []);
+      let user = users.find(u => u.email === email);
+      if (!user) {
+        user = { id: crypto.randomUUID(), name: email.split('@')[0], email, role: 'student', enrolledCourseIds: [], createdAt: new Date().toISOString() };
+        localStorage.setItem('da_users', JSON.stringify([...users, user]));
+      }
+      setState({ user, isAuthenticated: true });
+      seedNotifications(user.name, '/dashboard');
+    }
+  };
+
+  const register = async (name: string, email: string, password: string, role: 'student' | 'instructor') => {
+    try {
+      const data = await authApi.register({ name, email, password, role });
+      setTokens(data.access, data.refresh);
+      const u: User = { id: data.user.id ?? String(Date.now()), name, email, role, enrolledCourseIds: [], createdAt: new Date().toISOString() };
+      setState({ user: u, isAuthenticated: true });
+      seedNotifications(name, '/dashboard');
+      setApiAvailable(true);
+    } catch {
+      // Offline fallback
+      const user: User = { id: crypto.randomUUID(), name, email, role, enrolledCourseIds: [], createdAt: new Date().toISOString() };
+      const users: User[] = load('da_users', []);
+      localStorage.setItem('da_users', JSON.stringify([...users, user]));
+      setState({ user, isAuthenticated: true });
+      seedNotifications(name, '/dashboard');
+    }
   };
 
   const loginAsDemo = (role: 'student' | 'instructor') => {
@@ -111,33 +108,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: isStudent ? 'Alex Johnson' : 'Dr. Angela Yu',
       email: isStudent ? 'student@demo.com' : 'instructor@demo.com',
       role,
-      bio: isStudent
-        ? 'Passionate learner exploring web development and design.'
-        : 'Senior software engineer and educator with 10+ years of experience.',
+      bio: isStudent ? 'Passionate learner exploring web development and design.' : 'Senior software engineer and educator with 10+ years of experience.',
       enrolledCourseIds: isStudent ? ['1', '2', '4'] : [],
       createdAt: '2024-01-15T10:00:00.000Z',
     };
     setState({ user, isAuthenticated: true });
-    setNotifications([
-      { id: 'n1', message: `Welcome to the demo, ${user.name}!`, read: false, createdAt: new Date().toISOString(), link: isStudent ? '/dashboard' : '/instructor' },
-      { id: 'n2', message: 'New courses added in Web Development', read: false, createdAt: new Date(Date.now() - 86400000).toISOString(), link: '/courses' },
-      { id: 'n3', message: 'Complete your profile to get personalized recommendations', read: true, createdAt: new Date(Date.now() - 172800000).toISOString(), link: '/dashboard' },
-    ]);
+    seedNotifications(user.name, isStudent ? '/dashboard' : '/instructor');
     if (isStudent) {
       setTransactions([
         { id: 'tx1', date: '2024-11-03T14:22:00.000Z', courseTitle: 'The Complete Web Developer Bootcamp 2026', amount: 19.99, status: 'completed' },
         { id: 'tx2', date: '2024-10-18T09:10:00.000Z', courseTitle: 'Data Science and Machine Learning Bootcamp', amount: 29.99, status: 'completed' },
-        { id: 'tx3', date: '2024-09-05T16:45:00.000Z', courseTitle: 'Graphic Design Masterclass - Learn GREAT Design', amount: 22.99, status: 'completed' },
+        { id: 'tx3', date: '2024-09-05T16:45:00.000Z', courseTitle: 'Graphic Design Masterclass', amount: 22.99, status: 'completed' },
       ]);
-      // Seed some lecture progress for course 1
-      const progress = { completedLectures: ['0-0', '0-1', '0-2', '1-0', '1-1'] };
-      localStorage.setItem('progress_1', JSON.stringify(progress));
+      localStorage.setItem('progress_1', JSON.stringify({ completedLectures: ['0-0', '0-1', '0-2', '1-0', '1-1'] }));
     } else {
       setTransactions([]);
     }
   };
 
   const logout = () => {
+    clearTokens();
+    if (apiAvailable) authApi.logout().catch(() => {});
     setState({ user: null, isAuthenticated: false });
     setNotifications([]);
     setTransactions([]);
@@ -147,8 +138,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!state.user) return;
     const updated = { ...state.user, ...updates };
     setState(prev => ({ ...prev, user: updated }));
-    const stored = localStorage.getItem('da_users');
-    const users: User[] = stored ? JSON.parse(stored) : [];
+    if (apiAvailable) {
+      authApi.updateProfile({ name: updates.name, email: updates.email, bio: updates.bio, avatar: updates.avatar }).catch(() => {});
+    }
+    const users: User[] = load('da_users', []);
     const idx = users.findIndex(u => u.id === state.user!.id);
     if (idx >= 0) { users[idx] = updated; localStorage.setItem('da_users', JSON.stringify(users)); }
   };
@@ -158,52 +151,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updatedEnrolled = [...(state.user.enrolledCourseIds || []), courseId];
     const updated = { ...state.user, enrolledCourseIds: updatedEnrolled };
     setState(prev => ({ ...prev, user: updated }));
-    const stored = localStorage.getItem('da_users');
-    const users: User[] = stored ? JSON.parse(stored) : [];
+    if (apiAvailable) courseApi_enroll(courseId);
+    const users: User[] = load('da_users', []);
     const idx = users.findIndex(u => u.id === state.user!.id);
     if (idx >= 0) { users[idx] = updated; localStorage.setItem('da_users', JSON.stringify(users)); }
-    const tx: Transaction = {
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      courseTitle,
-      amount,
-      status: 'completed',
-    };
+    const tx: Transaction = { id: crypto.randomUUID(), date: new Date().toISOString(), courseTitle, amount, status: 'completed' };
     setTransactions(prev => [tx, ...prev]);
-    setNotifications(prev => [{
-      id: crypto.randomUUID(),
-      message: `You've enrolled in "${courseTitle}"!`,
-      read: false,
-      createdAt: new Date().toISOString(),
-      link: '/dashboard',
-    }, ...prev]);
+    setNotifications(prev => [{ id: crypto.randomUUID(), message: `You've enrolled in "${courseTitle}"!`, read: false, createdAt: new Date().toISOString(), link: '/dashboard' }, ...prev]);
   };
 
-  const markNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
-
-  const markAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
+  const markNotificationRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markAllNotificationsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   return (
-    <AuthContext.Provider value={{
-      ...state,
-      login,
-      loginAsDemo,
-      register,
-      logout,
-      updateUser,
-      enrollInCourse,
-      notifications,
-      markNotificationRead,
-      markAllNotificationsRead,
-      transactions,
-    }}>
+    <AuthContext.Provider value={{ ...state, apiAvailable, login, loginAsDemo, register, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+// Import courseApi.enroll lazily to avoid circular
+async function courseApi_enroll(id: string) {
+  const { courseApi } = await import('@/app/services/api');
+  courseApi.enroll(id).catch(() => {});
 }
 
 export function useAuth() {

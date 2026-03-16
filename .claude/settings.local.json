@@ -4,7 +4,8 @@
       "Bash(find:*)",
       "Bash(mkdir:*)",
       "Bash(npx tsc:*)",
-      "Bash(export:*)"
+      "Bash(export:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

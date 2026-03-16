@@ -1,10 +1,14 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { CourseCard } from '../components/CourseCard';
 import { courses, categories } from '../data/courses';
 import { ArrowRight, Play } from 'lucide-react';
+import { useAuth } from '@/app/store/AuthContext';
+import { toast } from 'sonner';
 
 export function Home() {
+  const { loginAsDemo } = useAuth();
+  const navigate = useNavigate();
   const featuredCourses = courses.filter((course) => course.bestseller).slice(0, 4);
   const popularCourses = courses.slice(0, 5);
 
@@ -34,6 +38,37 @@ export function Home() {
               </Button>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Demo Access Banner — always visible */}
+      <section className="bg-gradient-to-r from-purple-700 to-indigo-700 py-12">
+        <div className="max-w-4xl mx-auto px-6 text-center text-white">
+          <h2 className="text-2xl font-bold mb-2">Explore the Platform — No Account Needed</h2>
+          <p className="text-purple-200 mb-8">Try our fully featured demo to see everything Digital Academy has to offer</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => { loginAsDemo('student'); navigate('/profile?tab=courses'); toast.success('Logged in as Demo Student!'); }}
+              className="group flex items-center gap-3 bg-white text-purple-700 font-semibold px-8 py-4 rounded-xl hover:bg-purple-50 transition-all shadow-lg"
+            >
+              <span className="text-3xl">🎓</span>
+              <div className="text-left">
+                <div className="text-base font-bold">Demo Student</div>
+                <div className="text-xs text-purple-500 font-normal">3 enrolled courses · progress tracking · quiz access</div>
+              </div>
+            </button>
+            <button
+              onClick={() => { loginAsDemo('instructor'); navigate('/instructor'); toast.success('Logged in as Demo Instructor!'); }}
+              className="group flex items-center gap-3 bg-purple-800 text-white font-semibold px-8 py-4 rounded-xl hover:bg-purple-900 transition-all shadow-lg border border-purple-500"
+            >
+              <span className="text-3xl">👨‍🏫</span>
+              <div className="text-left">
+                <div className="text-base font-bold">Demo Instructor</div>
+                <div className="text-xs text-purple-300 font-normal">Analytics dashboard · course management · charts</div>
+              </div>
+            </button>
+          </div>
+          <p className="text-xs text-purple-300 mt-6">Demo data is stored locally in your browser and resets on logout.</p>
         </div>
       </section>
 

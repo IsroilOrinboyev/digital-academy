@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Search, ShoppingCart, Menu, Heart, Bell, User, LogOut, BookOpen, LayoutDashboard } from 'lucide-react';
+import { Search, ShoppingCart, Menu, Bell, User, LogOut, BookOpen, LayoutDashboard, HelpCircle, GraduationCap } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -14,13 +14,12 @@ import { categories, courses } from '../data/courses';
 import { Badge } from './ui/badge';
 import { useCart } from '@/app/store/CartContext';
 import { useAuth } from '@/app/store/AuthContext';
-import { useWishlist } from '@/app/store/WishlistContext';
+import { toast } from 'sonner';
 
 export function Header() {
   const navigate = useNavigate();
   const { items } = useCart();
-  const { isAuthenticated, user, logout, notifications, markNotificationRead, markAllNotificationsRead } = useAuth();
-  const { courseIds } = useWishlist();
+  const { isAuthenticated, user, logout, loginAsDemo, notifications, markNotificationRead, markAllNotificationsRead } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -28,7 +27,6 @@ export function Header() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const cartCount = items.length;
-  const wishlistCount = courseIds.length;
 
   const searchResults = searchQuery.trim()
     ? courses
@@ -51,8 +49,14 @@ export function Header() {
     setTimeout(() => setShowSearchDropdown(false), 150);
   };
 
+  const handleDemoLogin = (role: 'student' | 'instructor') => {
+    loginAsDemo(role);
+    navigate(role === 'student' ? '/profile' : '/instructor');
+    toast.success(`Logged in as Demo ${role === 'student' ? 'Student' : 'Instructor'}!`);
+  };
+
   return (
-    <header className="sticky top-0 z-50 bg-white border-b">
+    <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
       <div className="flex items-center gap-4 px-6 py-3 max-w-[1400px] mx-auto">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
@@ -121,23 +125,53 @@ export function Header() {
           )}
         </div>
 
-        {/* Right Side Icons */}
+        {/* Right Side */}
         <div className="flex items-center gap-2">
-          {/* Wishlist */}
-          <Link to="/dashboard">
-            <Button variant="ghost" size="icon" className="hidden md:flex relative">
-              <Heart className="w-5 h-5" />
-              {wishlistCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
-                  {wishlistCount}
-                </Badge>
-              )}
+
+          {/* Demo Access — always visible */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="hidden md:flex gap-2 border-purple-300 text-purple-700 hover:bg-purple-50">
+                <GraduationCap className="w-4 h-4" />
+                Try Demo
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 p-2">
+              <p className="text-xs text-gray-500 px-2 py-1 mb-1">Explore without an account</p>
+              <DropdownMenuItem
+                className="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-purple-50"
+                onClick={() => handleDemoLogin('student')}
+              >
+                <span className="text-2xl">🎓</span>
+                <div>
+                  <p className="font-semibold text-sm">Demo Student</p>
+                  <p className="text-xs text-gray-500">3 enrolled courses · quiz access · progress</p>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-purple-50"
+                onClick={() => handleDemoLogin('instructor')}
+              >
+                <span className="text-2xl">👨‍🏫</span>
+                <div>
+                  <p className="font-semibold text-sm">Demo Instructor</p>
+                  <p className="text-xs text-gray-500">Analytics · course management · charts</p>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Help */}
+          <Link to="/help">
+            <Button variant="ghost" size="sm" className="hidden md:flex gap-1.5 text-gray-600 hover:text-purple-700">
+              <HelpCircle className="w-4 h-4" />
+              Help
             </Button>
           </Link>
 
           {/* Cart */}
           <Link to="/cart">
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative" aria-label={`View cart (${cartCount} items)`}>
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
                 <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-purple-600 text-xs">
@@ -151,7 +185,7 @@ export function Header() {
           {isAuthenticated && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="hidden md:flex relative">
+                <Button variant="ghost" size="icon" className="hidden md:flex relative" aria-label={`Notifications (${unreadCount} unread)`}>
                   <Bell className="w-5 h-5" />
                   {unreadCount > 0 && (
                     <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
@@ -203,9 +237,11 @@ export function Header() {
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
+                <Button variant="ghost" size="icon" className="rounded-full" aria-label="User menu">
                   <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    {user?.name?.charAt(0).toUpperCase()}
+                    {user?.avatar
+                      ? <img src={user.avatar} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                      : user?.name?.charAt(0).toUpperCase()}
                   </div>
                 </Button>
               </DropdownMenuTrigger>
@@ -213,11 +249,20 @@ export function Header() {
                 <div className="px-4 py-3 border-b">
                   <p className="font-semibold text-sm">{user?.name}</p>
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${user?.role === 'instructor' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {user?.role}
+                  </span>
                 </div>
                 <DropdownMenuItem asChild>
-                  <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                  <Link to="/profile" className="flex items-center gap-2 cursor-pointer">
+                    <User className="w-4 h-4" />
+                    My Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/profile?tab=courses" className="flex items-center gap-2 cursor-pointer">
                     <BookOpen className="w-4 h-4" />
-                    My Learning
+                    My Courses
                   </Link>
                 </DropdownMenuItem>
                 {user?.role === 'instructor' && (
@@ -228,12 +273,6 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem asChild>
-                  <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
-                    <User className="w-4 h-4" />
-                    Account Settings
-                  </Link>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
@@ -264,23 +303,27 @@ export function Header() {
       <div className="border-t bg-gray-50">
         <div className="px-6 py-2 max-w-[1400px] mx-auto overflow-x-auto">
           <div className="flex items-center gap-6 text-sm">
-            <Link to="/courses?category=development" className="whitespace-nowrap hover:text-purple-600">
+            <Link to="/courses?category=development" className="whitespace-nowrap hover:text-purple-600 transition-colors">
               Development
             </Link>
-            <Link to="/courses?category=business" className="whitespace-nowrap hover:text-purple-600">
+            <Link to="/courses?category=business" className="whitespace-nowrap hover:text-purple-600 transition-colors">
               Business
             </Link>
-            <Link to="/courses?category=design" className="whitespace-nowrap hover:text-purple-600">
+            <Link to="/courses?category=design" className="whitespace-nowrap hover:text-purple-600 transition-colors">
               Design
             </Link>
-            <Link to="/courses?category=marketing" className="whitespace-nowrap hover:text-purple-600">
+            <Link to="/courses?category=marketing" className="whitespace-nowrap hover:text-purple-600 transition-colors">
               Marketing
             </Link>
-            <Link to="/courses?category=photography" className="whitespace-nowrap hover:text-purple-600">
+            <Link to="/courses?category=photography" className="whitespace-nowrap hover:text-purple-600 transition-colors">
               Photography
             </Link>
-            <Link to="/courses?category=music" className="whitespace-nowrap hover:text-purple-600">
+            <Link to="/courses?category=music" className="whitespace-nowrap hover:text-purple-600 transition-colors">
               Music
+            </Link>
+            <Link to="/help" className="whitespace-nowrap hover:text-purple-600 transition-colors text-gray-500 ml-auto flex items-center gap-1">
+              <HelpCircle className="w-3.5 h-3.5" />
+              Help Center
             </Link>
           </div>
         </div>
