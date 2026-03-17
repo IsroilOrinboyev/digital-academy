@@ -16,6 +16,8 @@ import Learn from './pages/Learn';
 import Search from './pages/Search';
 import Profile from './pages/Profile';
 import Help from './pages/Help';
+import AboutUs from './pages/AboutUs';
+import ContactUs from './pages/ContactUs';
 
 export const router = createBrowserRouter([
   // Standalone pages (no Layout)
@@ -96,6 +98,14 @@ export const router = createBrowserRouter([
       {
         path: 'help',
         Component: Help,
+      },
+      {
+        path: 'about',
+        Component: AboutUs,
+      },
+      {
+        path: 'contact',
+        Component: ContactUs,
       },
       {
         path: '*',

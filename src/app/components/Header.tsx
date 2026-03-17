@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Search, ShoppingCart, Menu, Bell, User, LogOut, BookOpen, LayoutDashboard, HelpCircle, GraduationCap } from 'lucide-react';
+import {
+  Search, ShoppingCart, User, LogOut, BookOpen,
+  LayoutDashboard, HelpCircle,
+} from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -10,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { categories, courses } from '../data/courses';
+import { courses } from '../data/courses';
 import { Badge } from './ui/badge';
 import { useCart } from '@/app/store/CartContext';
 import { useAuth } from '@/app/store/AuthContext';
@@ -19,13 +22,11 @@ import { toast } from 'sonner';
 export function Header() {
   const navigate = useNavigate();
   const { items } = useCart();
-  const { isAuthenticated, user, logout, loginAsDemo, notifications, markNotificationRead, markAllNotificationsRead } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
   const cartCount = items.length;
 
   const searchResults = searchQuery.trim()
@@ -49,15 +50,16 @@ export function Header() {
     setTimeout(() => setShowSearchDropdown(false), 150);
   };
 
-  const handleDemoLogin = (role: 'student' | 'instructor') => {
-    loginAsDemo(role);
-    navigate(role === 'student' ? '/profile' : '/instructor');
-    toast.success(`Logged in as Demo ${role === 'student' ? 'Student' : 'Instructor'}!`);
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+    toast.success('Logged out successfully.');
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
+    <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
       <div className="flex items-center gap-4 px-6 py-3 max-w-[1400px] mx-auto">
+
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <div className="w-10 h-10 bg-purple-600 rounded flex items-center justify-center">
@@ -65,26 +67,6 @@ export function Header() {
           </div>
           <span className="font-bold text-xl hidden sm:inline">Digital Academy</span>
         </Link>
-
-        {/* Categories Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="hidden lg:flex gap-2">
-              <Menu className="w-4 h-4" />
-              Categories
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            {categories.map((category) => (
-              <DropdownMenuItem key={category.id} asChild>
-                <Link to={`/courses?category=${category.id}`} className="flex items-center gap-2 w-full">
-                  <span>{category.icon}</span>
-                  <span>{category.name}</span>
-                </Link>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         {/* Search Bar */}
         <div className="flex-1 max-w-2xl relative">
@@ -126,40 +108,7 @@ export function Header() {
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-2">
-
-          {/* Demo Access — always visible */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="hidden md:flex gap-2 border-purple-300 text-purple-700 hover:bg-purple-50">
-                <GraduationCap className="w-4 h-4" />
-                Try Demo
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72 p-2">
-              <p className="text-xs text-gray-500 px-2 py-1 mb-1">Explore without an account</p>
-              <DropdownMenuItem
-                className="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-purple-50"
-                onClick={() => handleDemoLogin('student')}
-              >
-                <span className="text-2xl">🎓</span>
-                <div>
-                  <p className="font-semibold text-sm">Demo Student</p>
-                  <p className="text-xs text-gray-500">3 enrolled courses · quiz access · progress</p>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-purple-50"
-                onClick={() => handleDemoLogin('instructor')}
-              >
-                <span className="text-2xl">👨‍🏫</span>
-                <div>
-                  <p className="font-semibold text-sm">Demo Instructor</p>
-                  <p className="text-xs text-gray-500">Analytics · course management · charts</p>
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="flex items-center gap-1">
 
           {/* Help */}
           <Link to="/help">
@@ -181,105 +130,71 @@ export function Header() {
             </Button>
           </Link>
 
-          {/* Notifications */}
-          {isAuthenticated && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="hidden md:flex relative" aria-label={`Notifications (${unreadCount} unread)`}>
-                  <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center p-0 bg-red-500 text-xs">
-                      {unreadCount}
-                    </Badge>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80">
-                <div className="flex items-center justify-between px-4 py-2 border-b">
-                  <h3 className="font-semibold text-sm">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllNotificationsRead}
-                      className="text-xs text-purple-600 hover:underline"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
-                {notifications.slice(0, 5).map(notif => (
-                  <DropdownMenuItem
-                    key={notif.id}
-                    className={`flex flex-col items-start gap-1 px-4 py-3 cursor-pointer ${!notif.read ? 'bg-purple-50' : ''}`}
-                    onClick={() => {
-                      markNotificationRead(notif.id);
-                      if (notif.link) navigate(notif.link);
-                    }}
-                  >
-                    <div className="flex items-start gap-2 w-full">
-                      {!notif.read && <span className="w-2 h-2 rounded-full bg-purple-600 flex-shrink-0 mt-1" />}
-                      <p className={`text-sm ${!notif.read ? 'font-medium' : 'text-gray-600'} line-clamp-2`}>
-                        {notif.message}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-400 ml-4">
-                      {new Date(notif.createdAt).toLocaleDateString()}
-                    </p>
-                  </DropdownMenuItem>
-                ))}
-                {notifications.length === 0 && (
-                  <div className="px-4 py-6 text-center text-sm text-gray-500">No notifications</div>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
           {/* User Area */}
           {isAuthenticated ? (
             <DropdownMenu>
+              {/* Use a plain <button> — avoids double-Slot issue with Button+asChild */}
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full" aria-label="User menu">
-                  <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-full flex items-center justify-center hover:ring-2 hover:ring-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400 transition-all ml-1"
+                  aria-label="Open user menu"
+                >
+                  <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden select-none">
                     {user?.avatar
-                      ? <img src={user.avatar} alt={user.name} className="w-full h-full rounded-full object-cover" />
-                      : user?.name?.charAt(0).toUpperCase()}
+                      ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                      : user?.name?.charAt(0).toUpperCase() ?? 'U'}
                   </div>
-                </Button>
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+
+              <DropdownMenuContent align="end" className="w-60 z-50">
+                {/* User info header */}
                 <div className="px-4 py-3 border-b">
-                  <p className="font-semibold text-sm">{user?.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${user?.role === 'instructor' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                  <p className="font-semibold text-sm leading-tight">{user?.name}</p>
+                  <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full mt-1.5 inline-block font-medium ${
+                    user?.role === 'instructor'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
                     {user?.role}
                   </span>
                 </div>
-                <DropdownMenuItem asChild>
-                  <Link to="/profile" className="flex items-center gap-2 cursor-pointer">
-                    <User className="w-4 h-4" />
-                    My Profile
-                  </Link>
+
+                {/* Navigation items — use onClick+navigate to avoid asChild/Link issues */}
+                <DropdownMenuItem
+                  className="flex items-center gap-2 cursor-pointer py-2"
+                  onClick={() => navigate('/profile')}
+                >
+                  <User className="w-4 h-4" />
+                  My Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/profile?tab=courses" className="flex items-center gap-2 cursor-pointer">
-                    <BookOpen className="w-4 h-4" />
-                    My Courses
-                  </Link>
+
+                <DropdownMenuItem
+                  className="flex items-center gap-2 cursor-pointer py-2"
+                  onClick={() => navigate('/profile?tab=courses')}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  My Courses
                 </DropdownMenuItem>
+
                 {user?.role === 'instructor' && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/instructor" className="flex items-center gap-2 cursor-pointer">
-                      <LayoutDashboard className="w-4 h-4" />
-                      Instructor Dashboard
-                    </Link>
+                  <DropdownMenuItem
+                    className="flex items-center gap-2 cursor-pointer py-2"
+                    onClick={() => navigate('/instructor')}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Instructor Dashboard
                   </DropdownMenuItem>
                 )}
+
                 <DropdownMenuSeparator />
+
+                {/* Log Out */}
                 <DropdownMenuItem
-                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-                  onClick={() => {
-                    logout();
-                    navigate('/');
-                  }}
+                  className="flex items-center gap-2 cursor-pointer py-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+                  onClick={handleLogout}
                 >
                   <LogOut className="w-4 h-4" />
                   Log Out
@@ -287,7 +202,8 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="flex items-center gap-2">
+            /* Not logged in — show Log In + Sign Up */
+            <div className="flex items-center gap-2 ml-1">
               <Link to="/login">
                 <Button variant="ghost" size="sm">Log In</Button>
               </Link>
@@ -296,36 +212,6 @@ export function Header() {
               </Link>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Secondary Navigation */}
-      <div className="border-t bg-gray-50">
-        <div className="px-6 py-2 max-w-[1400px] mx-auto overflow-x-auto">
-          <div className="flex items-center gap-6 text-sm">
-            <Link to="/courses?category=development" className="whitespace-nowrap hover:text-purple-600 transition-colors">
-              Development
-            </Link>
-            <Link to="/courses?category=business" className="whitespace-nowrap hover:text-purple-600 transition-colors">
-              Business
-            </Link>
-            <Link to="/courses?category=design" className="whitespace-nowrap hover:text-purple-600 transition-colors">
-              Design
-            </Link>
-            <Link to="/courses?category=marketing" className="whitespace-nowrap hover:text-purple-600 transition-colors">
-              Marketing
-            </Link>
-            <Link to="/courses?category=photography" className="whitespace-nowrap hover:text-purple-600 transition-colors">
-              Photography
-            </Link>
-            <Link to="/courses?category=music" className="whitespace-nowrap hover:text-purple-600 transition-colors">
-              Music
-            </Link>
-            <Link to="/help" className="whitespace-nowrap hover:text-purple-600 transition-colors text-gray-500 ml-auto flex items-center gap-1">
-              <HelpCircle className="w-3.5 h-3.5" />
-              Help Center
-            </Link>
-          </div>
         </div>
       </div>
     </header>

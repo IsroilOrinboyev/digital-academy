@@ -7,6 +7,10 @@ import { CartProvider } from './app/store/CartContext'
 import { WishlistProvider } from './app/store/WishlistContext'
 import { Toaster } from 'sonner'
 
+// Ensure no stale dark class from a previous session
+document.documentElement.classList.remove('dark')
+localStorage.removeItem('da_theme')
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>

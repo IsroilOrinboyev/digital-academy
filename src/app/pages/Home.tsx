@@ -2,187 +2,259 @@ import { Link, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { CourseCard } from '../components/CourseCard';
 import { courses, categories } from '../data/courses';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, CheckCircle, GraduationCap, BookOpen, Globe, TrendingUp, DollarSign, Users, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/app/store/AuthContext';
 import { toast } from 'sonner';
 
+const categoryColors: Record<string, { bg: string; hover: string; iconBg: string; text: string }> = {
+  development: { bg: 'bg-blue-50',    hover: 'hover:bg-blue-100 hover:border-blue-200',   iconBg: 'bg-blue-100',    text: 'text-blue-700' },
+  business:    { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100 hover:border-emerald-200', iconBg: 'bg-emerald-100', text: 'text-emerald-700' },
+  design:      { bg: 'bg-orange-50',  hover: 'hover:bg-orange-100 hover:border-orange-200',  iconBg: 'bg-orange-100',  text: 'text-orange-700' },
+  marketing:   { bg: 'bg-pink-50',    hover: 'hover:bg-pink-100 hover:border-pink-200',    iconBg: 'bg-pink-100',    text: 'text-pink-700' },
+  photography: { bg: 'bg-amber-50',   hover: 'hover:bg-amber-100 hover:border-amber-200',   iconBg: 'bg-amber-100',   text: 'text-amber-700' },
+  music:       { bg: 'bg-purple-50',  hover: 'hover:bg-purple-100 hover:border-purple-200',  iconBg: 'bg-purple-100',  text: 'text-purple-700' },
+  fitness:     { bg: 'bg-red-50',     hover: 'hover:bg-red-100 hover:border-red-200',     iconBg: 'bg-red-100',     text: 'text-red-700' },
+  lifestyle:   { bg: 'bg-teal-50',    hover: 'hover:bg-teal-100 hover:border-teal-200',    iconBg: 'bg-teal-100',    text: 'text-teal-700' },
+};
+
 export function Home() {
-  const { loginAsDemo } = useAuth();
+  const { loginAsDemo, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const featuredCourses = courses.filter((course) => course.bestseller).slice(0, 4);
-  const popularCourses = courses.slice(0, 5);
+  const featuredCourses = courses.filter(c => c.bestseller).slice(0, 4);
+  const popularCourses = courses.slice(0, 8);
 
   return (
     <div>
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-purple-600 to-purple-800 text-white">
-        <div className="max-w-[1400px] mx-auto px-6 py-20">
-          <div className="max-w-2xl">
-            <h1 className="text-5xl font-bold mb-6">
-              Learn Without Limits
-            </h1>
-            <p className="text-xl mb-8 text-purple-100">
-              Start, switch, or advance your career with thousands of courses from
-              world-class universities and companies.
-            </p>
-            <div className="flex gap-4">
-              <Link to="/courses">
-                <Button size="lg" variant="secondary" className="gap-2">
-                  Explore Courses
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-              <Button size="lg" variant="outline" className="gap-2 bg-transparent text-white border-white hover:bg-white/10">
-                <Play className="w-4 h-4" />
-                Watch Demo
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Demo Access Banner — always visible */}
-      <section className="bg-gradient-to-r from-purple-700 to-indigo-700 py-12">
-        <div className="max-w-4xl mx-auto px-6 text-center text-white">
-          <h2 className="text-2xl font-bold mb-2">Explore the Platform — No Account Needed</h2>
-          <p className="text-purple-200 mb-8">Try our fully featured demo to see everything Digital Academy has to offer</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => { loginAsDemo('student'); navigate('/profile?tab=courses'); toast.success('Logged in as Demo Student!'); }}
-              className="group flex items-center gap-3 bg-white text-purple-700 font-semibold px-8 py-4 rounded-xl hover:bg-purple-50 transition-all shadow-lg"
-            >
-              <span className="text-3xl">🎓</span>
-              <div className="text-left">
-                <div className="text-base font-bold">Demo Student</div>
-                <div className="text-xs text-purple-500 font-normal">3 enrolled courses · progress tracking · quiz access</div>
-              </div>
-            </button>
-            <button
-              onClick={() => { loginAsDemo('instructor'); navigate('/instructor'); toast.success('Logged in as Demo Instructor!'); }}
-              className="group flex items-center gap-3 bg-purple-800 text-white font-semibold px-8 py-4 rounded-xl hover:bg-purple-900 transition-all shadow-lg border border-purple-500"
-            >
-              <span className="text-3xl">👨‍🏫</span>
-              <div className="text-left">
-                <div className="text-base font-bold">Demo Instructor</div>
-                <div className="text-xs text-purple-300 font-normal">Analytics dashboard · course management · charts</div>
-              </div>
-            </button>
-          </div>
-          <p className="text-xs text-purple-300 mt-6">Demo data is stored locally in your browser and resets on logout.</p>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="border-b bg-gray-50">
-        <div className="max-w-[1400px] mx-auto px-6 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 mb-2">65M+</div>
-              <div className="text-gray-600">Students</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 mb-2">210K+</div>
-              <div className="text-gray-600">Courses</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 mb-2">75+</div>
-              <div className="text-gray-600">Languages</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 mb-2">850M+</div>
-              <div className="text-gray-600">Enrollments</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Courses */}
-      <section className="py-16">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="flex items-center justify-between mb-8">
+      {/* ── Hero ── */}
+      <section className="bg-gradient-to-br from-purple-700 via-purple-600 to-indigo-700 text-white overflow-hidden">
+        <div className="max-w-[1400px] mx-auto px-6 py-20 lg:py-28">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            {/* Left */}
             <div>
-              <h2 className="text-3xl font-bold mb-2">Featured Courses</h2>
-              <p className="text-gray-600">Top picks from our bestselling collection</p>
+              <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm mb-6 border border-white/20">
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse shrink-0" />
+                Trusted by 65M+ learners worldwide
+              </div>
+              <h1 className="text-5xl lg:text-6xl font-bold leading-tight mb-6 tracking-tight">
+                Learn Without<br />Limits
+              </h1>
+              <p className="text-lg lg:text-xl text-purple-100 mb-10 leading-relaxed max-w-lg">
+                Start, switch, or advance your career with thousands of courses from world-class instructors.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link to="/courses">
+                  <Button size="lg" className="bg-white text-purple-700 hover:bg-purple-50 gap-2 px-7 font-semibold shadow-lg">
+                    Explore Courses
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+                {!isAuthenticated && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="bg-white/10 text-white border-white/30 hover:bg-white/20 gap-2 px-7"
+                    onClick={() => { loginAsDemo('student'); navigate('/profile?tab=courses'); toast.success('Logged in as Demo Student!'); }}
+                  >
+                    Try Free Demo
+                  </Button>
+                )}
+                {isAuthenticated && user?.role === 'instructor' && (
+                  <Link to="/instructor">
+                    <Button size="lg" variant="outline" className="bg-white/10 text-white border-white/30 hover:bg-white/20 gap-2 px-7">
+                      My Dashboard
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {/* Right — decorative stats card */}
+            <div className="hidden lg:flex items-center justify-center relative">
+              <div className="absolute w-72 h-72 bg-purple-400/20 rounded-full blur-3xl" />
+              <div className="absolute w-56 h-56 bg-indigo-400/20 rounded-full blur-3xl translate-x-16 translate-y-10" />
+              <div className="relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl w-full max-w-sm">
+                <p className="text-xs font-semibold uppercase tracking-widest text-purple-200 mb-5">Platform at a glance</p>
+                <div className="grid grid-cols-2 gap-5 mb-6">
+                  {[
+                    { Icon: GraduationCap, value: '65M+',  label: 'Students' },
+                    { Icon: BookOpen,      value: '210K+', label: 'Courses' },
+                    { Icon: Globe,         value: '75+',   label: 'Languages' },
+                    { Icon: TrendingUp,    value: '4.8★',  label: 'Avg Rating' },
+                  ].map(({ Icon, value, label }) => (
+                    <div key={label} className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-purple-200" />
+                      </div>
+                      <div>
+                        <div className="text-lg font-bold leading-tight">{value}</div>
+                        <div className="text-xs text-purple-300">{label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-white/15 pt-5 space-y-2.5">
+                  {['Learn at your own pace', 'Certificate on completion', 'Expert instructors'].map(text => (
+                    <div key={text} className="flex items-center gap-2.5 text-sm text-purple-100">
+                      <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                      {text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Featured Courses ── */}
+      <section className="py-20">
+        <div className="max-w-[1400px] mx-auto px-6">
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <p className="text-sm font-semibold text-purple-600 uppercase tracking-wider mb-1">Handpicked for you</p>
+              <h2 className="text-3xl font-bold">Featured Courses</h2>
             </div>
             <Link to="/courses">
-              <Button variant="outline" className="gap-2">
-                View All
-                <ArrowRight className="w-4 h-4" />
+              <Button variant="outline" className="gap-2 text-sm">
+                View all courses <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredCourses.map((course) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {featuredCourses.map(course => (
               <CourseCard key={course.id} course={course} />
             ))}
           </div>
         </div>
       </section>
 
-      {/* Categories Section */}
-      <section className="py-16 bg-gray-50">
+      {/* ── Categories ── */}
+      <section className="py-20 bg-gray-50/70">
         <div className="max-w-[1400px] mx-auto px-6">
-          <h2 className="text-3xl font-bold mb-8 text-center">Top Categories</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                to={`/courses?category=${category.id}`}
-                className="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow text-center group"
+          <div className="text-center mb-10">
+            <p className="text-sm font-semibold text-purple-600 uppercase tracking-wider mb-1">What do you want to learn?</p>
+            <h2 className="text-3xl font-bold">Browse Top Categories</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+            {categories.map(category => {
+              const colors = categoryColors[category.id] ?? { bg: 'bg-gray-50', hover: 'hover:bg-gray-100 hover:border-gray-200', iconBg: 'bg-gray-100', text: 'text-gray-700' };
+              return (
+                <Link
+                  key={category.id}
+                  to={`/courses?category=${category.id}`}
+                  className={`${colors.bg} ${colors.hover} border border-transparent rounded-xl p-4 text-center group transition-all duration-200 hover:shadow-md hover:-translate-y-0.5`}
+                >
+                  <div className={`${colors.iconBg} w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 text-2xl`}>
+                    {category.icon}
+                  </div>
+                  <h3 className={`text-xs font-semibold ${colors.text} leading-tight`}>
+                    {category.name}
+                  </h3>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Popular Courses (horizontal scroll) ── */}
+      <section className="py-20">
+        <div className="max-w-[1400px] mx-auto px-6">
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <p className="text-sm font-semibold text-purple-600 uppercase tracking-wider mb-1">Trending now</p>
+              <h2 className="text-3xl font-bold">Popular Courses</h2>
+            </div>
+            <Link to="/courses">
+              <Button variant="outline" className="gap-2 text-sm">
+                See all <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+          <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+            {popularCourses.map(course => (
+              <div key={course.id} className="shrink-0 w-64">
+                <CourseCard course={course} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Become an Instructor CTA ── */}
+      <section className="bg-gradient-to-br from-purple-700 to-indigo-800 text-white py-24">
+        <div className="max-w-[1400px] mx-auto px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <p className="text-sm font-semibold text-purple-300 uppercase tracking-wider mb-3">Share your expertise</p>
+              <h2 className="text-4xl font-bold mb-5 leading-tight">Become an Instructor</h2>
+              <p className="text-lg text-purple-100 mb-8 leading-relaxed">
+                Share your knowledge with millions of students worldwide. Create an online video course, reach students across the globe, and earn money.
+              </p>
+              <Button
+                size="lg"
+                className="bg-white text-purple-700 hover:bg-purple-50 gap-2 px-8 font-semibold shadow-lg"
+                onClick={() => {
+                  if (isAuthenticated && user?.role === 'instructor') navigate('/instructor');
+                  else navigate('/signup');
+                }}
               >
-                <div className="text-4xl mb-3">{category.icon}</div>
-                <h3 className="font-semibold group-hover:text-purple-600 transition-colors">
-                  {category.name}
-                </h3>
-              </Link>
-            ))}
+                Start Teaching Today
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { Icon: Users,      title: 'Global Reach',    desc: 'Connect with 65M+ students across 190+ countries' },
+                { Icon: DollarSign, title: 'Earn Revenue',    desc: 'Set your price and earn from every enrollment' },
+                { Icon: BarChart3,  title: 'Track Analytics', desc: 'Monitor student progress with detailed dashboards' },
+                { Icon: BookOpen,   title: 'Easy to Create',  desc: 'Our tools make course creation straightforward' },
+              ].map(({ Icon, title, desc }) => (
+                <div key={title} className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl p-5 hover:bg-white/15 transition-colors">
+                  <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center mb-3">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-semibold text-sm mb-1">{title}</h3>
+                  <p className="text-xs text-purple-200 leading-relaxed">{desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Popular Courses */}
-      <section className="py-16">
+      {/* ── Trusted Companies ── */}
+      <section className="py-16 border-t overflow-hidden bg-gray-50/50">
         <div className="max-w-[1400px] mx-auto px-6">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold mb-2">Popular Courses</h2>
-            <p className="text-gray-600">Students are learning from these trending courses</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {popularCourses.map((course) => (
-              <CourseCard key={course.id} course={course} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="bg-purple-600 text-white py-20">
-        <div className="max-w-[1400px] mx-auto px-6 text-center">
-          <h2 className="text-4xl font-bold mb-4">Become an Instructor</h2>
-          <p className="text-xl mb-8 text-purple-100 max-w-2xl mx-auto">
-            Share your knowledge with millions of students worldwide. Create an online video course,
-            reach students across the globe, and earn money.
+          <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-widest mb-10">
+            Trusted by 15,000+ companies and millions of learners worldwide
           </p>
-          <Button size="lg" variant="secondary" className="gap-2">
-            Start Teaching Today
-            <ArrowRight className="w-4 h-4" />
-          </Button>
-        </div>
-      </section>
-
-      {/* Trust Section */}
-      <section className="py-16 border-t">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <h3 className="text-center text-gray-600 mb-8">
-            Trusted by over 15,000 companies and millions of learners around the world
-          </h3>
-          <div className="flex flex-wrap justify-center items-center gap-12 opacity-50">
-            <div className="text-2xl font-bold">Volkswagen</div>
-            <div className="text-2xl font-bold">Samsung</div>
-            <div className="text-2xl font-bold">Cisco</div>
-            <div className="text-2xl font-bold">Vimeo</div>
-            <div className="text-2xl font-bold">P&G</div>
-            <div className="text-2xl font-bold">HP</div>
+          <div className="relative">
+            <div className="flex animate-marquee gap-16 items-center whitespace-nowrap">
+              {[...Array(2)].map((_, dupIdx) => (
+                <div key={dupIdx} className="flex gap-16 items-center shrink-0">
+                  {[
+                    { name: 'Volkswagen', color: '#1A1A1A' },
+                    { name: 'Samsung',    color: '#1428A0' },
+                    { name: 'Cisco',      color: '#049FD9' },
+                    { name: 'Vimeo',      color: '#1AB7EA' },
+                    { name: 'P&G',        color: '#003399' },
+                    { name: 'HP',         color: '#0096D6' },
+                    { name: 'Netflix',    color: '#E50914' },
+                    { name: 'Adobe',      color: '#FF0000' },
+                  ].map(({ name, color }) => (
+                    <div
+                      key={name}
+                      className="opacity-30 hover:opacity-60 transition-opacity duration-300 select-none"
+                      style={{ color, fontFamily: 'Arial, sans-serif', fontWeight: 800, fontSize: '20px', letterSpacing: '-0.5px' }}
+                    >
+                      {name}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
