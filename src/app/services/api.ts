@@ -1,5 +1,5 @@
 // Base URL from env variable, defaults to Django dev server
-const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://127.0.0.1:8000';
 
 const TOKEN_KEY = 'da_access_token';
 const REFRESH_KEY = 'da_refresh_token';
@@ -42,11 +42,15 @@ export async function apiRequest<T>(
   retry = true
 ): Promise<T> {
   const token = getAccessToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> ?? {}),
-  };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const isFormData = options.body instanceof FormData;
+  const headers = new Headers(options.headers ?? {});
+
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
 
@@ -57,18 +61,77 @@ export async function apiRequest<T>(
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail ?? err?.message ?? `HTTP ${res.status}`);
+    const raw = await res.text();
+    let message = `HTTP ${res.status}`;
+
+    if (raw) {
+      try {
+        const err = JSON.parse(raw);
+        message = err?.detail ?? err?.message ?? message;
+      } catch {
+        message = `${message}: ${raw.slice(0, 220)}`;
+      }
+    }
+
+    throw new Error(message);
   }
 
   if (res.status === 204) return undefined as T;
   return res.json();
 }
 
+export interface CreateUnitPayload {
+  title: string;
+  desc: string;
+  lessons: Array<{
+    title: string;
+    desc: string;
+    additional_task?: string;
+    video?: File | null;
+    presentation?: File | null;
+  }>;
+}
+
+export interface CreateCoursePayload {
+  title: string;
+  desc: string;
+  base_price: number;
+  discount_price: number;
+  units: CreateUnitPayload[];
+}
+
+export interface CreateLessonApiPayload {
+  course_unit: string;
+  title: string;
+  desc: string;
+  additional_task: string;
+  video?: File | null;
+  presentation?: File | null;
+}
+
 // ── Auth endpoints ─────────────────────────────────────────────────────────
+export interface LoginApiResponse {
+  success: boolean;
+  status: number;
+  data: {
+    message: string;
+    requires_password_change: boolean;
+    user: {
+      id: string;
+      username: string | null;
+      email: string;
+      role: string;
+    };
+    tokens: {
+      refresh: string;
+      access: string;
+    };
+  };
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
-    apiRequest<{ access: string; refresh: string; user: any }>('/api/auth/login/', {
+    apiRequest<LoginApiResponse>('/api/users/auth/login/', {
       method: 'POST', body: JSON.stringify({ email, password }),
     }),
 
@@ -96,6 +159,60 @@ export const courseApi = {
   list: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return apiRequest<any[]>(`/api/courses/${qs}`);
+  },
+
+  create: (data: CreateCoursePayload) => {
+    const formData = new FormData();
+    formData.append('title', data.title);
+    formData.append('desc', data.desc);
+    formData.append('base_price', String(data.base_price));
+    formData.append('discount_price', String(data.discount_price));
+
+    const unitsPayload = data.units.map((unit, unitIndex) => ({
+      title: unit.title,
+      desc: unit.desc,
+      lessons: unit.lessons.map((lesson, lessonIndex) => {
+        const video = lesson.video ?? null;
+        const presentation = lesson.presentation ?? null;
+
+        const videoKey = `video_${unitIndex}_${lessonIndex}`;
+        const presentationKey = `presentation_${unitIndex}_${lessonIndex}`;
+
+        if (video) {
+          formData.append(videoKey, video);
+        }
+        if (presentation) {
+          formData.append(presentationKey, presentation);
+        }
+
+        return {
+          title: lesson.title,
+          desc: lesson.desc,
+          additional_task: lesson.additional_task ?? '',
+          // Backend expects field keys, not raw file names.
+          video: video ? videoKey : null,
+          presentation: presentation ? presentationKey : null,
+        };
+      }),
+    }));
+
+    formData.append('units', JSON.stringify(unitsPayload));
+
+    return apiRequest<any>('/api/teachers/course/', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  createLesson: (data: CreateLessonApiPayload) => {
+    const formData = new FormData();
+    formData.append('course_unit', data.course_unit);
+    formData.append('title', data.title);
+    formData.append('desc', data.desc);
+    formData.append('additional_task', data.additional_task);
+    if (data.video) formData.append('video', data.video);
+    if (data.presentation) formData.append('presentation', data.presentation);
+    return apiRequest<any>('/api/teachers/lesson/', { method: 'POST', body: formData });
   },
 
   detail: (id: string) => apiRequest<any>(`/api/courses/${id}/`),

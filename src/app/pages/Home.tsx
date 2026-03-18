@@ -4,7 +4,6 @@ import { CourseCard } from '../components/CourseCard';
 import { courses, categories } from '../data/courses';
 import { ArrowRight, CheckCircle, GraduationCap, BookOpen, Globe, TrendingUp, DollarSign, Users, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/app/store/AuthContext';
-import { toast } from 'sonner';
 
 const categoryColors: Record<string, { bg: string; hover: string; iconBg: string; text: string }> = {
   development: { bg: 'bg-blue-50',    hover: 'hover:bg-blue-100 hover:border-blue-200',   iconBg: 'bg-blue-100',    text: 'text-blue-700' },
@@ -18,7 +17,7 @@ const categoryColors: Record<string, { bg: string; hover: string; iconBg: string
 };
 
 export function Home() {
-  const { loginAsDemo, isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const featuredCourses = courses.filter(c => c.bestseller).slice(0, 4);
   const popularCourses = courses.slice(0, 8);
@@ -48,16 +47,6 @@ export function Home() {
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
-                {!isAuthenticated && (
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="bg-white/10 text-white border-white/30 hover:bg-white/20 gap-2 px-7"
-                    onClick={() => { loginAsDemo('student'); navigate('/profile?tab=courses'); toast.success('Logged in as Demo Student!'); }}
-                  >
-                    Try Free Demo
-                  </Button>
-                )}
                 {isAuthenticated && user?.role === 'instructor' && (
                   <Link to="/instructor">
                     <Button size="lg" variant="outline" className="bg-white/10 text-white border-white/30 hover:bg-white/20 gap-2 px-7">

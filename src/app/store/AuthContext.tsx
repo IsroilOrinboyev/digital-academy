@@ -4,8 +4,7 @@ import { authApi, setTokens, clearTokens } from '@/app/services/api';
 
 interface AuthContextType extends AuthState {
   apiAvailable: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginAsDemo: (role: 'student' | 'instructor') => void;
+  login: (email: string, password: string) => Promise<'student' | 'instructor'>;
   register: (name: string, email: string, password: string, role: 'student' | 'instructor') => Promise<void>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
@@ -26,6 +25,12 @@ function load<T>(key: string, fallback: T): T {
   try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
 }
 
+function mapApiRole(role?: string): 'student' | 'instructor' {
+  const normalized = role?.toUpperCase();
+  if (normalized === 'TEACHER' || normalized === 'ADMIN' || normalized === 'INSTRUCTOR') return 'instructor';
+  return 'student';
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>(() => load(STORAGE_KEY, { user: null, isAuthenticated: false }));
   const [notifications, setNotifications] = useState<Notification[]>(() => load(NOTIF_KEY, []));
@@ -38,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check if API is reachable on mount
   useEffect(() => {
-    const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+    const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://127.0.0.1:8000';
     fetch(`${BASE_URL}/api/health/`, { signal: AbortSignal.timeout(2000) })
       .then(() => setApiAvailable(true))
       .catch(() => setApiAvailable(false));
@@ -55,31 +60,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const data = await authApi.login(email, password);
-      setTokens(data.access, data.refresh);
+      if (
+        !data?.data?.tokens?.access ||
+        !data?.data?.tokens?.refresh ||
+        !data?.data?.user?.email
+      ) {
+        throw new Error('API response is empty or invalid.');
+      }
+
+      setTokens(data.data.tokens.access, data.data.tokens.refresh);
+      const role = mapApiRole(data.data.user.role);
       const u: User = {
-        id: data.user.id ?? data.user.pk ?? String(Date.now()),
-        name: data.user.full_name ?? data.user.name ?? email.split('@')[0],
-        email: data.user.email,
-        role: data.user.role ?? 'student',
-        bio: data.user.bio,
-        avatar: data.user.avatar,
-        enrolledCourseIds: data.user.enrolled_course_ids ?? [],
-        createdAt: data.user.date_joined ?? new Date().toISOString(),
+        id: data.data.user.id ?? String(Date.now()),
+        name: data.data.user.username ?? email.split('@')[0],
+        email: data.data.user.email,
+        role,
+        enrolledCourseIds: [],
+        createdAt: new Date().toISOString(),
       };
       setState({ user: u, isAuthenticated: true });
-      seedNotifications(u.name, '/dashboard');
+      seedNotifications(u.name, role === 'instructor' ? '/instructor' : '/profile');
       setApiAvailable(true);
+      return role;
     } catch (err: any) {
-      if (err.message === 'UNAUTHORIZED' || err.message?.includes('credentials')) throw err;
-      // API unreachable — fall back to local user store
-      const users: User[] = load('da_users', []);
-      let user = users.find(u => u.email === email);
-      if (!user) {
-        user = { id: crypto.randomUUID(), name: email.split('@')[0], email, role: 'student', enrolledCourseIds: [], createdAt: new Date().toISOString() };
-        localStorage.setItem('da_users', JSON.stringify([...users, user]));
-      }
-      setState({ user, isAuthenticated: true });
-      seedNotifications(user.name, '/dashboard');
+      setApiAvailable(false);
+      throw new Error(err?.message ?? 'API error');
     }
   };
 
@@ -89,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setTokens(data.access, data.refresh);
       const u: User = { id: data.user.id ?? String(Date.now()), name, email, role, enrolledCourseIds: [], createdAt: new Date().toISOString() };
       setState({ user: u, isAuthenticated: true });
-      seedNotifications(name, '/dashboard');
+      seedNotifications(name, role === 'instructor' ? '/instructor' : '/profile');
       setApiAvailable(true);
     } catch {
       // Offline fallback
@@ -97,32 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const users: User[] = load('da_users', []);
       localStorage.setItem('da_users', JSON.stringify([...users, user]));
       setState({ user, isAuthenticated: true });
-      seedNotifications(name, '/dashboard');
-    }
-  };
-
-  const loginAsDemo = (role: 'student' | 'instructor') => {
-    const isStudent = role === 'student';
-    const user: User = {
-      id: `demo-${role}`,
-      name: isStudent ? 'Alex Johnson' : 'Dr. Angela Yu',
-      email: isStudent ? 'student@demo.com' : 'instructor@demo.com',
-      role,
-      bio: isStudent ? 'Passionate learner exploring web development and design.' : 'Senior software engineer and educator with 10+ years of experience.',
-      enrolledCourseIds: isStudent ? ['1', '2', '4'] : [],
-      createdAt: '2024-01-15T10:00:00.000Z',
-    };
-    setState({ user, isAuthenticated: true });
-    seedNotifications(user.name, isStudent ? '/dashboard' : '/instructor');
-    if (isStudent) {
-      setTransactions([
-        { id: 'tx1', date: '2024-11-03T14:22:00.000Z', courseTitle: 'The Complete Web Developer Bootcamp 2026', amount: 19.99, status: 'completed' },
-        { id: 'tx2', date: '2024-10-18T09:10:00.000Z', courseTitle: 'Data Science and Machine Learning Bootcamp', amount: 29.99, status: 'completed' },
-        { id: 'tx3', date: '2024-09-05T16:45:00.000Z', courseTitle: 'Graphic Design Masterclass', amount: 22.99, status: 'completed' },
-      ]);
-      localStorage.setItem('progress_1', JSON.stringify({ completedLectures: ['0-0', '0-1', '0-2', '1-0', '1-1'] }));
-    } else {
-      setTransactions([]);
+      seedNotifications(name, role === 'instructor' ? '/instructor' : '/profile');
     }
   };
 
@@ -164,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const markAllNotificationsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   return (
-    <AuthContext.Provider value={{ ...state, apiAvailable, login, loginAsDemo, register, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
+    <AuthContext.Provider value={{ ...state, apiAvailable, login, register, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
       {children}
     </AuthContext.Provider>
   );

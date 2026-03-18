@@ -1,5 +1,5 @@
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate, useLocation } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/store/AuthContext';
 import { Button } from '@/app/components/ui/button';
@@ -13,27 +13,19 @@ interface LoginForm {
 }
 
 export default function Login() {
-  const { login, loginAsDemo } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as any)?.from?.pathname || '/dashboard';
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>();
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      await login(data.email, data.password);
+      const role = await login(data.email, data.password);
       toast.success('Welcome back!');
-      navigate(from, { replace: true });
-    } catch {
-      toast.error('Invalid credentials. Please try again.');
+      navigate(role === 'instructor' ? '/instructor' : '/profile', { replace: true });
+    } catch (err: any) {
+      toast.error(err?.message ?? 'API error. Please try again.');
     }
-  };
-
-  const handleDemo = (role: 'student' | 'instructor') => {
-    loginAsDemo(role);
-    toast.success(`Logged in as demo ${role}!`);
-    navigate(role === 'instructor' ? '/instructor' : '/dashboard', { replace: true });
   };
 
   return (
@@ -45,34 +37,6 @@ export default function Login() {
           <CardDescription>Sign in to your Digital Academy account</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Demo access section */}
-          <div className="mb-5 rounded-lg border border-purple-200 bg-purple-50 p-4">
-            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Quick Demo Access</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleDemo('student')}
-                className="flex flex-col items-center gap-1 rounded-lg border-2 border-purple-200 bg-white px-3 py-3 text-left hover:border-purple-500 hover:bg-purple-50 transition-colors"
-              >
-                <span className="text-2xl">🎓</span>
-                <span className="text-sm font-semibold text-gray-800">Student Demo</span>
-                <span className="text-xs text-gray-500">3 enrolled courses</span>
-              </button>
-              <button
-                onClick={() => handleDemo('instructor')}
-                className="flex flex-col items-center gap-1 rounded-lg border-2 border-purple-200 bg-white px-3 py-3 text-left hover:border-purple-500 hover:bg-purple-50 transition-colors"
-              >
-                <span className="text-2xl">👨‍🏫</span>
-                <span className="text-sm font-semibold text-gray-800">Instructor Demo</span>
-                <span className="text-xs text-gray-500">Dashboard + analytics</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="relative mb-4">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-            <div className="relative flex justify-center"><span className="bg-white px-3 text-xs text-gray-500">or sign in with your account</span></div>
-          </div>
-
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

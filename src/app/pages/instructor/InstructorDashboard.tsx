@@ -1,15 +1,39 @@
 import { useState } from 'react';
 import { useAuth } from '@/app/store/AuthContext';
 import { courses } from '@/app/data/courses';
+import { courseApi } from '@/app/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
+import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Users, BookOpen, Star, TrendingUp } from 'lucide-react';
 
 type Tab = 'overview' | 'courses' | 'create';
+
+interface LessonFormItem {
+  title: string;
+  desc: string;
+  additional_task: string;
+  video: File | null;
+  presentation: File | null;
+}
+
+interface UnitFormItem {
+  title: string;
+  desc: string;
+  lessons: LessonFormItem[];
+}
+
+interface CourseFormState {
+  title: string;
+  desc: string;
+  base_price: number;
+  discount_price: number;
+  units: UnitFormItem[];
+}
 
 const mockChartData = [
   { month: 'Oct', enrollments: 12 },
@@ -23,6 +47,139 @@ const mockChartData = [
 export default function InstructorDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [isCreating, setIsCreating] = useState(false);
+  const [form, setForm] = useState<CourseFormState>({
+    title: '',
+    desc: '',
+    base_price: 0,
+    discount_price: 0,
+    units: [
+      {
+        title: '',
+        desc: '',
+        lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }],
+      },
+    ],
+  });
+
+  const updateUnit = (unitIndex: number, key: 'title' | 'desc', value: string) => {
+    setForm(prev => ({
+      ...prev,
+      units: prev.units.map((unit, idx) => (idx === unitIndex ? { ...unit, [key]: value } : unit)),
+    }));
+  };
+
+  const updateLesson = (
+    unitIndex: number,
+    lessonIndex: number,
+    key: 'title' | 'desc' | 'additional_task',
+    value: string
+  ) => {
+
+    setForm(prev => ({
+      ...prev,
+      units: prev.units.map((unit, idx) => {
+        if (idx !== unitIndex) return unit;
+        return {
+          ...unit,
+          lessons: unit.lessons.map((lesson, lIdx) =>
+            lIdx === lessonIndex ? { ...lesson, [key]: value } : lesson
+          ),
+        };
+      }),
+    }));
+  };
+
+  const updateLessonFile = (
+    unitIndex: number,
+    lessonIndex: number,
+    key: 'video' | 'presentation',
+    file: File | null
+  ) => {
+    setForm(prev => ({
+      ...prev,
+      units: prev.units.map((unit, idx) => {
+        if (idx !== unitIndex) return unit;
+        return {
+          ...unit,
+          lessons: unit.lessons.map((lesson, lIdx) =>
+            lIdx === lessonIndex ? { ...lesson, [key]: file } : lesson
+          ),
+        };
+      }),
+    }));
+  };
+
+  const addUnit = () => {
+    setForm(prev => ({
+      ...prev,
+      units: [
+        ...prev.units,
+        { title: '', desc: '', lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }] },
+      ],
+    }));
+  };
+
+  const addLesson = (unitIndex: number) => {
+    setForm(prev => ({
+      ...prev,
+      units: prev.units.map((unit, idx) =>
+        idx === unitIndex
+          ? { ...unit, lessons: [...unit.lessons, { title: '', desc: '', additional_task: '', video: null, presentation: null }] }
+          : unit
+      ),
+    }));
+  };
+
+  const handleCreateCourse = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!form.title.trim() || !form.desc.trim()) {
+      toast.error('Course title va description majburiy.');
+      return;
+    }
+
+    if (!form.units.length || !form.units[0].lessons.length) {
+      toast.error("Kamida 1 ta unit va 1 ta lesson bo'lishi kerak.");
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+
+      await courseApi.create({
+        title: form.title.trim(),
+        desc: form.desc.trim(),
+        base_price: Number(form.base_price),
+        discount_price: Number(form.discount_price),
+        units: form.units.map(unit => ({
+          title: unit.title.trim(),
+          desc: unit.desc.trim(),
+          lessons: unit.lessons.map(lesson => ({
+            title: lesson.title.trim(),
+            desc: lesson.desc.trim(),
+            additional_task: lesson.additional_task.trim(),
+            video: lesson.video,
+            presentation: lesson.presentation,
+          })),
+        })),
+      });
+
+      toast.success('Course muvaffaqiyatli yaratildi.');
+      setForm({
+        title: '',
+        desc: '',
+        base_price: 0,
+        discount_price: 0,
+        units: [{ title: '', desc: '', lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }] }],
+      });
+      setActiveTab('courses');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Course yaratishda xatolik yuz berdi.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
   // In demo mode, show all courses since mock data has pre-set instructor names
   const matchedCourses = courses.filter(c => c.instructor === user?.name);
   const instructorCourses = matchedCourses.length > 0 ? matchedCourses : courses;
@@ -129,44 +286,125 @@ export default function InstructorDashboard() {
         <Card>
           <CardHeader><CardTitle>Create New Course</CardTitle></CardHeader>
           <CardContent>
-            <form
-              className="space-y-4 max-w-xl"
-              onSubmit={e => { e.preventDefault(); toast.success('Course saved as draft!'); setActiveTab('courses'); }}
-            >
+            <form className="space-y-4 max-w-3xl" onSubmit={handleCreateCourse}>
               <div className="space-y-2">
                 <Label>Course Title</Label>
-                <Input placeholder="e.g. Complete React Developer Course" required />
+                <Input
+                  placeholder="e.g. Complete React Developer Course"
+                  value={form.title}
+                  onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
-                <Label>Subtitle</Label>
-                <Input placeholder="Short description of the course" />
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Short description of the course"
+                  value={form.desc}
+                  onChange={e => setForm(prev => ({ ...prev, desc: e.target.value }))}
+                  required
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Category</Label>
-                  <select className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <option>Development</option>
-                    <option>Business</option>
-                    <option>Design</option>
-                    <option>Marketing</option>
-                  </select>
+                  <Label>Base Price</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.base_price}
+                    onChange={e => setForm(prev => ({ ...prev, base_price: Number(e.target.value) }))}
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label>Level</Label>
-                  <select className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <option>Beginner</option>
-                    <option>Intermediate</option>
-                    <option>Advanced</option>
-                    <option>All Levels</option>
-                  </select>
+                  <Label>Discount Price</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.discount_price}
+                    onChange={e => setForm(prev => ({ ...prev, discount_price: Number(e.target.value) }))}
+                    required
+                  />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Price ($)</Label>
-                <Input type="number" min="0" step="0.01" placeholder="29.99" />
-              </div>
+
+              {form.units.map((unit, unitIndex) => (
+                <div key={unitIndex} className="border rounded-lg p-4 space-y-3">
+                  <h3 className="font-semibold">Unit {unitIndex + 1}</h3>
+                  <div className="space-y-2">
+                    <Label>Unit Title</Label>
+                    <Input
+                      value={unit.title}
+                      onChange={e => updateUnit(unitIndex, 'title', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Unit Description</Label>
+                    <Textarea
+                      value={unit.desc}
+                      onChange={e => updateUnit(unitIndex, 'desc', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {unit.lessons.map((lesson, lessonIndex) => (
+                    <div key={lessonIndex} className="border rounded-md p-3 space-y-2 bg-gray-50">
+                      <p className="text-sm font-medium">Lesson {lessonIndex + 1}</p>
+                      <Input
+                        placeholder="Lesson title"
+                        value={lesson.title}
+                        onChange={e => updateLesson(unitIndex, lessonIndex, 'title', e.target.value)}
+                        required
+                      />
+                      <Textarea
+                        placeholder="Lesson description"
+                        value={lesson.desc}
+                        onChange={e => updateLesson(unitIndex, lessonIndex, 'desc', e.target.value)}
+                        required
+                      />
+                      <Input
+                        placeholder="Additional task"
+                        value={lesson.additional_task}
+                        onChange={e => updateLesson(unitIndex, lessonIndex, 'additional_task', e.target.value)}
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-600">Video (optional)</Label>
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="w-full text-sm"
+                            onChange={e => updateLessonFile(unitIndex, lessonIndex, 'video', e.target.files?.[0] ?? null)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-600">Presentation (optional)</Label>
+                          <input
+                            type="file"
+                            accept=".pdf,.ppt,.pptx,.key"
+                            className="w-full text-sm"
+                            onChange={e => updateLessonFile(unitIndex, lessonIndex, 'presentation', e.target.files?.[0] ?? null)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <Button type="button" variant="outline" onClick={() => addLesson(unitIndex)}>
+                    Add Lesson
+                  </Button>
+                </div>
+              ))}
+
+              <Button type="button" variant="outline" onClick={addUnit}>
+                Add Unit
+              </Button>
+
               <div className="flex gap-3">
-                <Button type="submit" className="bg-purple-600 hover:bg-purple-700">Save as Draft</Button>
+                <Button type="submit" className="bg-purple-600 hover:bg-purple-700" disabled={isCreating}>
+                  {isCreating ? 'Creating...' : 'Create Course'}
+                </Button>
                 <Button type="button" variant="outline" onClick={() => setActiveTab('courses')}>Cancel</Button>
               </div>
             </form>
