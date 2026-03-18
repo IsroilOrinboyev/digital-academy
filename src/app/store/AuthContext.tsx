@@ -41,14 +41,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem(TX_KEY, JSON.stringify(transactions)); }, [transactions]);
 
-  // Check if API is reachable on mount
-  useEffect(() => {
-    const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://127.0.0.1:8000';
-    fetch(`${BASE_URL}/api/health/`, { signal: AbortSignal.timeout(2000) })
-      .then(() => setApiAvailable(true))
-      .catch(() => setApiAvailable(false));
-  }, []);
-
   const seedNotifications = (name: string, dest: string) => {
     setNotifications([
       { id: 'n1', message: `Welcome back, ${name}!`, read: false, createdAt: new Date().toISOString(), link: dest },

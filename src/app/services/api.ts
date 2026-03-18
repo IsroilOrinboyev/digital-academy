@@ -1,5 +1,5 @@
 // Base URL from env variable, defaults to Django dev server
-const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://127.0.0.1:8000';
+const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'https://api.digital-academy.live';
 
 const TOKEN_KEY = 'da_access_token';
 const REFRESH_KEY = 'da_refresh_token';
@@ -97,7 +97,21 @@ export interface CreateCoursePayload {
   desc: string;
   base_price: number;
   discount_price: number;
+  category: string;
+  cover_img: File | null;
   units: CreateUnitPayload[];
+}
+
+export interface CategoryItem {
+  id: string;
+  title: string;
+  slug: string;
+}
+
+export interface CategoryListResponse {
+  success: boolean;
+  status: number;
+  data: CategoryItem[];
 }
 
 export interface CreateLessonApiPayload {
@@ -167,6 +181,10 @@ export const courseApi = {
     formData.append('desc', data.desc);
     formData.append('base_price', String(data.base_price));
     formData.append('discount_price', String(data.discount_price));
+    formData.append('category', data.category);
+    if (data.cover_img) {
+      formData.append('cover_img', data.cover_img);
+    }
 
     const unitsPayload = data.units.map((unit, unitIndex) => ({
       title: unit.title,
@@ -238,4 +256,8 @@ export const courseApi = {
       `/api/courses/${courseId}/quizzes/${sectionIdx}/submit/`,
       { method: 'POST', body: JSON.stringify({ answers }) }
     ),
+};
+
+export const categoryApi = {
+  list: () => apiRequest<CategoryListResponse>('/api/users/category/'),
 };

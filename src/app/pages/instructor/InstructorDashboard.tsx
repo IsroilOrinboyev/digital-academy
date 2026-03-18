@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/store/AuthContext';
 import { courses } from '@/app/data/courses';
-import { courseApi } from '@/app/services/api';
+import { categoryApi, CategoryItem, courseApi } from '@/app/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -32,6 +32,8 @@ interface CourseFormState {
   desc: string;
   base_price: number;
   discount_price: number;
+  category: string;
+  cover_img: File | null;
   units: UnitFormItem[];
 }
 
@@ -48,11 +50,14 @@ export default function InstructorDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [isCreating, setIsCreating] = useState(false);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [form, setForm] = useState<CourseFormState>({
     title: '',
     desc: '',
     base_price: 0,
     discount_price: 0,
+    category: '',
+    cover_img: null,
     units: [
       {
         title: '',
@@ -61,6 +66,19 @@ export default function InstructorDashboard() {
       },
     ],
   });
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await categoryApi.list();
+        setCategories(response?.data ?? []);
+      } catch (err: any) {
+        toast.error(err?.message ?? 'Categorylarni yuklab bo\'lmadi.');
+      }
+    };
+
+    loadCategories();
+  }, []);
 
   const updateUnit = (unitIndex: number, key: 'title' | 'desc', value: string) => {
     setForm(prev => ({
@@ -144,6 +162,16 @@ export default function InstructorDashboard() {
       return;
     }
 
+    if (!form.category) {
+      toast.error('Category tanlash majburiy.');
+      return;
+    }
+
+    if (!form.cover_img) {
+      toast.error('Course rasmi majburiy.');
+      return;
+    }
+
     try {
       setIsCreating(true);
 
@@ -152,6 +180,8 @@ export default function InstructorDashboard() {
         desc: form.desc.trim(),
         base_price: Number(form.base_price),
         discount_price: Number(form.discount_price),
+        category: form.category,
+        cover_img: form.cover_img,
         units: form.units.map(unit => ({
           title: unit.title.trim(),
           desc: unit.desc.trim(),
@@ -171,6 +201,8 @@ export default function InstructorDashboard() {
         desc: '',
         base_price: 0,
         discount_price: 0,
+        category: '',
+        cover_img: null,
         units: [{ title: '', desc: '', lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }] }],
       });
       setActiveTab('courses');
@@ -326,6 +358,34 @@ export default function InstructorDashboard() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={form.category}
+                  onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
+                  required
+                >
+                  <option value="">Category tanlang</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Course Image</Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="w-full text-sm"
+                  onChange={e => setForm(prev => ({ ...prev, cover_img: e.target.files?.[0] ?? null }))}
+                  required
+                />
               </div>
 
               {form.units.map((unit, unitIndex) => (
