@@ -1,1 +1,11 @@
 node_modules
+
+# Local build output
+dist/
+build/
+
+# OS-generated files
+.DS_Store
+
+# Local assistant/editor config
+.claude/
