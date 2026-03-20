@@ -196,19 +196,19 @@ export default function InstructorDashboard() {
       if (categoryResult.status === 'fulfilled') {
         setCategories(categoryResult.value?.data ?? []);
       } else {
-        toast.error('Category ro\'yxatini yuklab bo\'lmadi.');
+        toast.error('Failed to load categories.');
       }
 
       if (courseResult.status === 'fulfilled') {
         setMyCourses(courseResult.value?.data ?? []);
       } else {
         const message = (courseResult.reason as Error | undefined)?.message;
-        toast.error(message ?? 'Course ro\'yxatini yuklab bo\'lmadi.');
+        toast.error(message ?? 'Failed to load course list.');
         setMyCourses([]);
       }
 
       if (categoryResult.status === 'rejected' && courseResult.status === 'rejected') {
-        toast.error('Dashboard ma\'lumotlarini yuklab bo\'lmadi.');
+        toast.error('Failed to load dashboard data.');
       }
 
       setIsLoadingCourses(false);
@@ -244,7 +244,7 @@ export default function InstructorDashboard() {
     }
 
     if (!editForm.title.trim() || !editForm.desc.trim()) {
-      toast.error('Title va description majburiy.');
+      toast.error('Title and description are required.');
       return;
     }
 
@@ -259,10 +259,10 @@ export default function InstructorDashboard() {
       });
 
       await reloadMyCourses();
-      toast.success('Course yangilandi.');
+      toast.success('Course updated.');
       cancelEditCourse();
     } catch (err: any) {
-      toast.error(err?.message ?? 'Course update xatolik bilan tugadi.');
+      toast.error(err?.message ?? 'Course update failed.');
     } finally {
       setIsUpdatingCourse(false);
     }
@@ -271,7 +271,7 @@ export default function InstructorDashboard() {
   const startCreateQuiz = async (courseId: string) => {
     const selectedCourse = myCourses.find(course => course.id === courseId);
     if (!selectedCourse) {
-      toast.error('Course topilmadi. Sahifani yangilang.');
+      toast.error('Course not found. Refresh the page and try again.');
       return;
     }
 
@@ -296,7 +296,7 @@ export default function InstructorDashboard() {
     setQuizUnitId(quizOptions.units[0]?.id ?? '');
 
     if (!quizOptions.lessons.length) {
-      toast.warning('Unit yoki lesson topilmadi. API response ni tekshirib ko\'raylik.');
+      toast.warning('No units or lessons were found for this course.');
     }
   };
 
@@ -377,24 +377,24 @@ export default function InstructorDashboard() {
 
   const handleCreateQuizzes = async () => {
     if (!quizCourseId) {
-      toast.error('Avval courseni tanlang.');
+      toast.error('Select a course first.');
       return;
     }
 
     if (!quizLessonId) {
-      toast.error('Lesson tanlash majburiy.');
+      toast.error('Selecting a lesson is required.');
       return;
     }
 
     const quizTitle = quizForm.title.trim();
     const quizDescription = quizForm.description.trim();
     if (!quizTitle || !quizDescription) {
-      toast.error('Quiz title va description majburiy.');
+      toast.error('Quiz title and description are required.');
       return;
     }
 
     if (!quizForm.questions.length) {
-      toast.error('Kamida 1 ta savol bo\'lishi kerak.');
+      toast.error('At least one question is required.');
       return;
     }
 
@@ -403,17 +403,17 @@ export default function InstructorDashboard() {
       const question = quizForm.questions[qIdx];
 
       if (!question.question_text.trim()) {
-        toast.error(`Savol matni majburiy (Savol ${qIdx + 1}).`);
+        toast.error(`Question text is required (Question ${qIdx + 1}).`);
         return;
       }
 
       if (!Number.isFinite(question.points) || Number(question.points) <= 0) {
-        toast.error(`Points 1 dan katta bo'lishi kerak (Savol ${qIdx + 1}).`);
+        toast.error(`Points must be greater than 0 (Question ${qIdx + 1}).`);
         return;
       }
 
       if (question.variants.length < 2) {
-        toast.error(`Har bir savolda kamida 2 ta variant bo'lishi kerak (Savol ${qIdx + 1}).`);
+        toast.error(`Each question must have at least 2 options (Question ${qIdx + 1}).`);
         return;
       }
 
@@ -423,13 +423,13 @@ export default function InstructorDashboard() {
       }));
 
       if (trimmedVariants.some(variant => !variant.text)) {
-        toast.error(`Variant text majburiy (Savol ${qIdx + 1}).`);
+        toast.error(`Option text is required (Question ${qIdx + 1}).`);
         return;
       }
 
       const correctCount = trimmedVariants.filter(variant => variant.is_correct).length;
       if (correctCount !== 1) {
-        toast.error(`Har savolda aynan 1 ta to'g'ri javob bo'lishi kerak (Savol ${qIdx + 1}).`);
+        toast.error(`Each question must have exactly 1 correct answer (Question ${qIdx + 1}).`);
         return;
       }
 
@@ -448,10 +448,10 @@ export default function InstructorDashboard() {
         description: quizDescription,
         questions: normalizedQuestions,
       });
-      toast.success('Quiz yaratildi.');
+      toast.success('Quiz created.');
       cancelCreateQuiz();
     } catch (err: any) {
-      toast.error(err?.message ?? 'Quiz yaratishda xatolik yuz berdi.');
+      toast.error(err?.message ?? 'Failed to create quiz.');
     } finally {
       setIsCreatingQuiz(false);
     }
@@ -530,22 +530,22 @@ export default function InstructorDashboard() {
     e.preventDefault();
 
     if (!form.title.trim() || !form.desc.trim()) {
-      toast.error('Course title va description majburiy.');
+      toast.error('Course title and description are required.');
       return;
     }
 
     if (!form.units.length || !form.units[0].lessons.length) {
-      toast.error("Kamida 1 ta unit va 1 ta lesson bo'lishi kerak.");
+      toast.error('At least 1 unit and 1 lesson are required.');
       return;
     }
 
     if (!form.category) {
-      toast.error('Category tanlash majburiy.');
+      toast.error('Selecting a category is required.');
       return;
     }
 
     if (!form.cover_img) {
-      toast.error('Course rasmi majburiy.');
+      toast.error('Course image is required.');
       return;
     }
 
@@ -574,7 +574,7 @@ export default function InstructorDashboard() {
 
       await reloadMyCourses();
 
-      toast.success('Course muvaffaqiyatli yaratildi.');
+      toast.success('Course created successfully.');
       setForm({
         title: '',
         desc: '',
@@ -586,7 +586,7 @@ export default function InstructorDashboard() {
       });
       setActiveTab('courses');
     } catch (err: any) {
-      toast.error(err?.message ?? 'Course yaratishda xatolik yuz berdi.');
+      toast.error(err?.message ?? 'Failed to create course.');
     } finally {
       setIsCreating(false);
     }
@@ -660,11 +660,11 @@ export default function InstructorDashboard() {
           <h2 className="text-xl font-bold mb-4">My Courses ({myCourses.length})</h2>
 
           {isLoadingCourses && (
-            <p className="text-sm text-gray-600">Course list yuklanmoqda...</p>
+            <p className="text-sm text-gray-600">Loading course list...</p>
           )}
 
           {!isLoadingCourses && myCourses.length === 0 && (
-            <p className="text-sm text-gray-600">Hozircha course yo'q.</p>
+            <p className="text-sm text-gray-600">No courses yet.</p>
           )}
 
           {!isLoadingCourses && myCourses.length > 0 && (
@@ -779,7 +779,7 @@ export default function InstructorDashboard() {
                                   setQuizLessonId('');
                                 }}
                               >
-                                <option value="">Unit tanlang</option>
+                                <option value="">Select a unit</option>
                                 {quizUnitOptions.map(unit => (
                                   <option key={unit.id} value={unit.id}>
                                     {unit.label}
@@ -792,7 +792,7 @@ export default function InstructorDashboard() {
                                 value={quizLessonId}
                                 onChange={e => setQuizLessonId(e.target.value)}
                               >
-                                <option value="">Lesson tanlang</option>
+                                <option value="">Select a lesson</option>
                                 {filteredQuizLessonOptions.map(lesson => (
                                   <option key={lesson.id} value={lesson.id}>
                                     {lesson.label}
@@ -813,7 +813,7 @@ export default function InstructorDashboard() {
 
                               {quizForm.questions.map((question, questionIndex) => (
                                 <div key={questionIndex} className="rounded-md border p-3 bg-white space-y-2">
-                                  <p className="text-xs font-semibold text-gray-600">Savol {questionIndex + 1}</p>
+                                  <p className="text-xs font-semibold text-gray-600">Question {questionIndex + 1}</p>
                                   <Input
                                     placeholder="Question text"
                                     value={question.question_text}
@@ -840,7 +840,7 @@ export default function InstructorDashboard() {
                                           checked={variant.is_correct}
                                           onChange={() => setQuizCorrectVariant(questionIndex, variantIndex)}
                                         />
-                                        To'g'ri javob
+                                        Correct answer
                                       </label>
                                     </div>
                                   ))}
@@ -850,14 +850,14 @@ export default function InstructorDashboard() {
                                     variant="outline"
                                     onClick={() => addQuizVariant(questionIndex)}
                                   >
-                                    Variant qo'shish
+                                    Add Option
                                   </Button>
                                 </div>
                               ))}
 
                               <div className="flex gap-2">
                                 <Button type="button" variant="outline" onClick={addQuizQuestion}>
-                                  Savol qo'shish
+                                  Add Question
                                 </Button>
                                 <Button
                                   type="button"
@@ -938,7 +938,7 @@ export default function InstructorDashboard() {
                   onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
                   required
                 >
-                  <option value="">Category tanlang</option>
+                  <option value="">Select a category</option>
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>
                       {category.title}
