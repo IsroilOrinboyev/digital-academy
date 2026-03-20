@@ -58,7 +58,7 @@ export function CourseDetail() {
 
   if (!course) {
     return (
-      <div className="max-w-[1400px] mx-auto px-6 py-16 text-center">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-16 text-center">
         <h1 className="text-3xl font-bold mb-4">Course Not Found</h1>
         <p className="text-gray-600 mb-8">The course you're looking for doesn't exist.</p>
         <Link to="/courses">
@@ -116,8 +116,8 @@ export function CourseDetail() {
     <div>
       {/* Hero Section */}
       <div className="bg-gray-900 text-white">
-        <div className="max-w-[1400px] mx-auto px-6 py-12">
-          <div className="flex flex-col lg:flex-row gap-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-10 sm:py-12">
+          <div className="flex flex-col xl:flex-row gap-8">
             {/* Left Content */}
             <div className="flex-1">
               <div className="mb-4">
@@ -135,8 +135,8 @@ export function CourseDetail() {
                 </Badge>
               )}
 
-              <h1 className="text-4xl font-bold mb-4">{course.title}</h1>
-              <p className="text-xl text-gray-300 mb-6">{course.description}</p>
+              <h1 className="text-3xl sm:text-4xl font-bold mb-4">{course.title}</h1>
+              <p className="text-lg sm:text-xl text-gray-300 mb-6">{course.description}</p>
 
               <div className="flex items-center gap-4 mb-6">
                 <div className="flex items-center gap-2">
@@ -181,7 +181,7 @@ export function CourseDetail() {
             </div>
 
             {/* Right Card - Desktop */}
-            <div className="hidden lg:block w-96">
+            <div className="hidden xl:block w-96">
               <Card className="sticky top-24">
                 <div className="relative aspect-video">
                   <img
@@ -326,7 +326,7 @@ export function CourseDetail() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-[1400px] mx-auto px-6 py-12">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-12">
         <div className="max-w-4xl">
           <section className="rounded-3xl border border-purple-100 bg-gradient-to-br from-white to-purple-50/40 p-5 md:p-8 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">

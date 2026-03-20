@@ -111,18 +111,18 @@ export function Home() {
     <div>
       {/* ── Hero ── */}
       <section className="bg-gradient-to-br from-purple-700 via-purple-600 to-indigo-700 text-white overflow-hidden">
-        <div className="max-w-[1400px] mx-auto px-6 py-20 lg:py-28">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-16 sm:py-20 xl:py-28">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 xl:gap-12 items-center">
             {/* Left */}
             <div>
               <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm mb-6 border border-white/20">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse shrink-0" />
                 Trusted by 65M+ learners worldwide
               </div>
-              <h1 className="text-6xl lg:text-7xl font-bold leading-tight mb-6 tracking-tight">
+              <h1 className="text-4xl sm:text-5xl xl:text-7xl font-bold leading-tight mb-6 tracking-tight">
                 Learn Without<br />Limits
               </h1>
-              <p className="text-xl lg:text-2xl text-purple-100 mb-10 leading-relaxed max-w-lg">
+              <p className="text-lg sm:text-xl xl:text-2xl text-purple-100 mb-8 xl:mb-10 leading-relaxed max-w-xl">
                 Start, switch, or advance your career with thousands of courses from world-class instructors.
               </p>
               <div className="flex flex-wrap gap-3">
@@ -144,7 +144,7 @@ export function Home() {
             </div>
 
             {/* Right — decorative stats card */}
-            <div className="hidden lg:flex items-center justify-center relative">
+            <div className="hidden xl:flex items-center justify-center relative">
               <div className="absolute w-72 h-72 bg-purple-400/20 rounded-full blur-3xl" />
               <div className="absolute w-56 h-56 bg-indigo-400/20 rounded-full blur-3xl translate-x-16 translate-y-10" />
               <div className="relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl w-full max-w-sm">
@@ -183,11 +183,11 @@ export function Home() {
 
       {/* ── Featured Courses ── */}
       <section className="py-20">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="flex items-end justify-between mb-10">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
             <div>
               <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">Handpicked for you</p>
-              <h2 className="text-4xl font-bold">Featured Courses</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold">Featured Courses</h2>
             </div>
             <Link to="/courses">
               <Button variant="outline" className="gap-2 text-sm">
@@ -195,7 +195,7 @@ export function Home() {
               </Button>
             </Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
             {featuredCourses.map(course => (
               <CourseCard key={course.id} course={course} />
             ))}
@@ -205,12 +205,12 @@ export function Home() {
 
       {/* ── Categories ── */}
       <section className="py-20 bg-gray-50/70">
-        <div className="max-w-[1400px] mx-auto px-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
           <div className="text-center mb-10">
               <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">What do you want to learn?</p>
-              <h2 className="text-4xl font-bold">Browse Top Categories</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold">Browse Top Categories</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
             {homeCategories.map(category => {
               const colors = categoryColors[category.colorKey] ?? categoryColors.default;
               return (
@@ -234,11 +234,11 @@ export function Home() {
 
       {/* ── Popular Courses (horizontal scroll) ── */}
       <section className="py-20">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="flex items-end justify-between mb-10">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
             <div>
               <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">Trending now</p>
-              <h2 className="text-4xl font-bold">Popular Courses</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold">Popular Courses</h2>
             </div>
             <Link to="/courses">
               <Button variant="outline" className="gap-2 text-sm">
@@ -258,12 +258,12 @@ export function Home() {
 
       {/* ── Become an Instructor CTA ── */}
       <section className="bg-gradient-to-br from-purple-700 to-indigo-800 text-white py-24">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 xl:gap-12 items-center">
             <div>
               <p className="text-base font-semibold text-purple-300 uppercase tracking-wider mb-3">Share your expertise</p>
-              <h2 className="text-5xl font-bold mb-5 leading-tight">Become an Instructor</h2>
-              <p className="text-xl text-purple-100 mb-8 leading-relaxed">
+              <h2 className="text-4xl sm:text-5xl font-bold mb-5 leading-tight">Become an Instructor</h2>
+              <p className="text-lg sm:text-xl text-purple-100 mb-8 leading-relaxed">
                 Share your knowledge with millions of students worldwide. Create an online video course, reach students across the globe, and earn money.
               </p>
               <Button
@@ -300,7 +300,7 @@ export function Home() {
 
       {/* ── Trusted Companies ── */}
       <section className="py-16 border-t overflow-hidden bg-gray-50/50">
-        <div className="max-w-[1400px] mx-auto px-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
           <p className="text-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-10">
             Trusted by 15,000+ companies and millions of learners worldwide
           </p>

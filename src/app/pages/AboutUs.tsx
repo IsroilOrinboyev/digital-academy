@@ -7,9 +7,9 @@ export default function AboutUs() {
     <div>
       {/* Hero */}
       <section className="bg-gradient-to-r from-purple-600 to-purple-800 text-white py-20">
-        <div className="max-w-[1400px] mx-auto px-6 text-center">
-          <h1 className="text-5xl font-bold mb-6">About Digital Academy</h1>
-          <p className="text-xl text-purple-100 max-w-2xl mx-auto">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 text-center">
+          <h1 className="text-4xl sm:text-5xl font-bold mb-6">About Digital Academy</h1>
+          <p className="text-lg sm:text-xl text-purple-100 max-w-2xl mx-auto">
             We are on a mission to improve lives through learning. Our platform connects
             ambitious learners with expert instructors from around the world.
           </p>
@@ -18,8 +18,8 @@ export default function AboutUs() {
 
       {/* Mission */}
       <section className="py-20">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 xl:gap-16 items-center">
             <div>
               <h2 className="text-3xl font-bold mb-6">Our Mission</h2>
               <p className="text-gray-600 text-lg leading-relaxed mb-4">
@@ -65,7 +65,7 @@ export default function AboutUs() {
 
       {/* Values */}
       <section className="py-20 bg-gray-50">
-        <div className="max-w-[1400px] mx-auto px-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
           <h2 className="text-3xl font-bold text-center mb-12">What We Stand For</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-white p-8 rounded-xl shadow-sm">
@@ -104,12 +104,12 @@ export default function AboutUs() {
 
       {/* CTA */}
       <section className="py-20 bg-purple-600 text-white">
-        <div className="max-w-[1400px] mx-auto px-6 text-center">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4">Join Millions of Learners</h2>
           <p className="text-purple-100 text-lg mb-8">
             Start your learning journey today with a free account.
           </p>
-          <div className="flex justify-center gap-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link to="/signup">
               <Button size="lg" variant="secondary">Create Free Account</Button>
             </Link>

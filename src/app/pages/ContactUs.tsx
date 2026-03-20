@@ -23,15 +23,15 @@ export default function ContactUs() {
     <div>
       {/* Hero */}
       <section className="bg-gradient-to-r from-purple-600 to-purple-800 text-white py-20">
-        <div className="max-w-[1400px] mx-auto px-6 text-center">
-          <h1 className="text-5xl font-bold mb-4">Contact Us</h1>
-          <p className="text-xl text-purple-100">We'd love to hear from you. Send us a message and we'll respond shortly.</p>
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 text-center">
+          <h1 className="text-4xl sm:text-5xl font-bold mb-4">Contact Us</h1>
+          <p className="text-lg sm:text-xl text-purple-100">We'd love to hear from you. Send us a message and we'll respond shortly.</p>
         </div>
       </section>
 
       <section className="py-20">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 xl:gap-12">
 
             {/* Contact Info */}
             <div className="space-y-6">
@@ -75,7 +75,7 @@ export default function ContactUs() {
             </div>
 
             {/* Contact Form */}
-            <div className="lg:col-span-2">
+            <div className="xl:col-span-2">
               {submitted ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-10 text-center">
                   <div className="text-5xl mb-4">✅</div>

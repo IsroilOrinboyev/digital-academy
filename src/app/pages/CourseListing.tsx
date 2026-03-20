@@ -123,7 +123,7 @@ export function CourseListing() {
     <div className="min-h-screen bg-gray-50/40">
       {/* Page header */}
       <div className="bg-white border-b">
-        <div className="max-w-[1400px] mx-auto px-6 py-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-8">
           <h1 className="text-3xl font-bold mb-1">All Courses</h1>
           <p className="text-gray-500 text-sm">
             Discover your next skill — {apiCourses.length} courses available
@@ -159,7 +159,7 @@ export function CourseListing() {
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           <FilterSidebar
             categories={availableCategories}
@@ -187,7 +187,7 @@ export function CourseListing() {
             </div>
 
             {filteredCourses.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-5">
                 {filteredCourses.map(course => (
                   <CourseCard key={course.id} course={course} />
                 ))}
