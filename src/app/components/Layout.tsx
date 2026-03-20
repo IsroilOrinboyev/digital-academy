@@ -13,7 +13,7 @@ export function Layout() {
         {/* Top accent line */}
         <div className="h-1 bg-gradient-to-r from-purple-600 via-indigo-500 to-purple-600" />
 
-        <div className="max-w-[1400px] mx-auto px-6 pt-14 pb-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10">
           {/* Brand + tagline */}
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-10 mb-12">
             <div className="max-w-xs">

@@ -3,6 +3,10 @@ const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'https://api.digital-
 
 const TOKEN_KEY = 'da_access_token';
 const REFRESH_KEY = 'da_refresh_token';
+const CATEGORY_ENDPOINT_PATH = '/api/users/category/';
+const CATEGORY_ENDPOINT_ABSOLUTE = 'https://api.digital-academy.live/api/users/category/';
+const TEACHER_COURSES_ENDPOINT = '/api/teachers/courses/';
+const TEACHER_COURSE_ENDPOINT_LEGACY = '/api/teachers/course/';
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -77,7 +81,21 @@ export async function apiRequest<T>(
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json();
+
+  const raw = await res.text();
+  if (!raw.trim()) return undefined as T;
+
+  const contentType = res.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      // Some successful endpoints can return invalid JSON bodies.
+      return undefined as T;
+    }
+  }
+
+  return raw as T;
 }
 
 export interface CreateUnitPayload {
@@ -121,6 +139,180 @@ export interface CreateLessonApiPayload {
   additional_task: string;
   video?: File | null;
   presentation?: File | null;
+}
+
+export interface CreateQuizVariantApiPayload {
+  text: string;
+  is_correct: boolean;
+}
+
+export interface CreateQuizQuestionApiPayload {
+  question_text: string;
+  points: number;
+  variants: CreateQuizVariantApiPayload[];
+}
+
+export interface CreateQuizApiPayload {
+  lesson: string;
+  title: string;
+  description: string;
+  questions: CreateQuizQuestionApiPayload[];
+}
+
+export interface UserCourseItem {
+  id: string;
+  cover_img: string | null;
+  title: string;
+  desc: string;
+  base_price: number;
+  discount_price: number;
+  units: Array<{
+    id: string;
+    title: string;
+    desc: string;
+    lessons: Array<{
+      id: string;
+      title: string;
+      video: string | null;
+      presentation: string | null;
+      additional_task: string;
+    }>;
+  }>;
+}
+
+export interface UserCourseListResponse {
+  success: boolean;
+  status: number;
+  data: UserCourseItem[];
+}
+
+export interface UserPublicCourseItem {
+  id: string;
+  cover_img: string | null;
+  title: string;
+  desc: string;
+  base_price: number;
+  discount_price: number;
+}
+
+export interface UserPublicCourseListResponse {
+  success: boolean;
+  status: number;
+  data: UserPublicCourseItem[];
+}
+
+export interface UserCoursesQueryParams {
+  category?: string[];
+  price_min?: number;
+  price_max?: number;
+}
+
+export interface MyCourseListItem {
+  id: string;
+  course: string;
+  progress: number;
+  status: string;
+}
+
+export interface MyCourseListResponse {
+  success: boolean;
+  status: number;
+  data: MyCourseListItem[];
+}
+
+export interface MyCourseDetailResponse {
+  success: boolean;
+  status: number;
+  data: {
+    id: string;
+    progress: number;
+    status: string;
+    course: {
+      id: string;
+      units: Array<{
+        id: string;
+        title: string;
+        desc: string;
+        lessons: Array<{
+          id: string;
+          title: string;
+          video: string | null;
+          presentation: string | null;
+          additional_task: string;
+          quizzes?: Array<{
+            id: string;
+            lesson: string;
+            title: string;
+            description: string;
+            is_finished?: boolean;
+            due_at?: string | null;
+            questions?: Array<{
+              id: string;
+              question_text: string;
+              points: number;
+              variants: Array<{
+                id: string;
+                text: string;
+                is_correct: boolean;
+              }>;
+            }>;
+          }>;
+        }>;
+      }>;
+    };
+  };
+}
+
+export interface SubmitUserQuizAnswerItem {
+  question: string;
+  variant: string;
+}
+
+export interface SubmitUserQuizPayload {
+  answers: SubmitUserQuizAnswerItem[];
+}
+
+export interface SubmitUserQuizResponse {
+  success: boolean;
+  status: number;
+  data: {
+    quiz: string;
+    user: string | null;
+    correct_answers: number;
+    wrong_answers: number;
+    total_questions: number;
+    total: string;
+    status: 'PASSED' | 'FAILED' | string;
+    course_progress: number;
+  };
+}
+
+export interface UpdateCoursePayload {
+  title: string;
+  desc: string;
+  base_price: number;
+  discount_price: number;
+  cover_img?: File | null;
+}
+
+export interface CourseProgressApiResponse {
+  success?: boolean;
+  status_code?: number;
+  data?: {
+    progress?: number;
+    status?: string;
+    completed_lectures?: string[];
+  };
+  progress?: number;
+  status_text?: string;
+  status?: string;
+  completed_lectures?: string[];
+}
+
+export interface UpdateCourseProgressPayload {
+  progress?: number;
+  status?: string;
+  completed_lectures?: string[];
 }
 
 // ── Auth endpoints ─────────────────────────────────────────────────────────
@@ -216,7 +408,7 @@ export const courseApi = {
 
     formData.append('units', JSON.stringify(unitsPayload));
 
-    return apiRequest<any>('/api/teachers/course/', {
+    return apiRequest<any>(TEACHER_COURSES_ENDPOINT, {
       method: 'POST',
       body: formData,
     });
@@ -233,20 +425,140 @@ export const courseApi = {
     return apiRequest<any>('/api/teachers/lesson/', { method: 'POST', body: formData });
   },
 
+  myCourses: async () => {
+    try {
+      return await apiRequest<UserCourseListResponse>(TEACHER_COURSES_ENDPOINT);
+    } catch {
+      return apiRequest<UserCourseListResponse>(TEACHER_COURSE_ENDPOINT_LEGACY);
+    }
+  },
+
+  update: (courseId: string, data: UpdateCoursePayload) => {
+    const formData = new FormData();
+    formData.append('title', data.title);
+    formData.append('desc', data.desc);
+    formData.append('base_price', String(data.base_price));
+    formData.append('discount_price', String(data.discount_price));
+    if (data.cover_img) {
+      formData.append('cover_img', data.cover_img);
+    }
+
+    return apiRequest<any>(`${TEACHER_COURSES_ENDPOINT}${courseId}/`, {
+      method: 'PATCH',
+      body: formData,
+    }).catch(() =>
+      apiRequest<any>(`${TEACHER_COURSE_ENDPOINT_LEGACY}${courseId}/`, {
+        method: 'PATCH',
+        body: formData,
+      })
+    );
+  },
+
   detail: (id: string) => apiRequest<any>(`/api/courses/${id}/`),
 
-  enroll: (id: string) =>
-    apiRequest<void>(`/api/courses/${id}/enroll/`, { method: 'POST' }),
+  userCourses: (params?: UserCoursesQueryParams) => {
+    if (!params) {
+      return apiRequest<UserPublicCourseListResponse>('/api/users/courses/');
+    }
+
+    const query = new URLSearchParams();
+    if (Array.isArray(params.category)) {
+      params.category.forEach((categoryId) => {
+        if (categoryId) query.append('category', categoryId);
+      });
+    }
+    if (typeof params.price_min === 'number') {
+      query.append('price_min', String(params.price_min));
+    }
+    if (typeof params.price_max === 'number') {
+      query.append('price_max', String(params.price_max));
+    }
+
+    const qs = query.toString();
+    const endpoint = qs ? `/api/users/courses/?${qs}` : '/api/users/courses/';
+    return apiRequest<UserPublicCourseListResponse>(endpoint);
+  },
+
+  myEnrolledCourses: () => apiRequest<MyCourseListResponse>('/api/users/my-courses/'),
+
+  myEnrolledCourseDetail: (id: string) =>
+    apiRequest<MyCourseDetailResponse>(`/api/users/my-courses/${id}/`),
+
+  submitUserQuiz: async (quizId: string, data: SubmitUserQuizPayload) => {
+    const payload = {
+      method: 'POST',
+      body: JSON.stringify(data),
+    };
+
+    try {
+      return await apiRequest<SubmitUserQuizResponse>(`/api/users/quiz/${quizId}/submit/`, payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('HTTP 404') && !message.includes('HTTP 405')) {
+        throw error;
+      }
+      return apiRequest<SubmitUserQuizResponse>(`/api/users/quiz/${quizId}/`, payload);
+    }
+  },
+
+  enroll: async (id: string) => {
+    try {
+      return await apiRequest<void>('/api/users/enrolment/', {
+        method: 'POST',
+        body: JSON.stringify({ course: id }),
+      });
+    } catch {
+      return apiRequest<void>(`/api/courses/${id}/enroll/`, { method: 'POST' });
+    }
+  },
 
   reviews: (id: string) => apiRequest<any[]>(`/api/courses/${id}/reviews/`),
 
   addReview: (id: string, data: { rating: number; comment: string }) =>
     apiRequest<any>(`/api/courses/${id}/reviews/`, { method: 'POST', body: JSON.stringify(data) }),
 
-  getProgress: (id: string) => apiRequest<any>(`/api/courses/${id}/progress/`),
+  getProgress: async (params: { enrollmentId?: string; courseId?: string }) => {
+    const { enrollmentId, courseId } = params;
 
-  updateProgress: (id: string, data: { completed_lectures: string[] }) =>
-    apiRequest<any>(`/api/courses/${id}/progress/`, { method: 'POST', body: JSON.stringify(data) }),
+    if (enrollmentId) {
+      try {
+        return await apiRequest<CourseProgressApiResponse>(`/api/users/my-courses/${enrollmentId}/progress/`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('HTTP 404') && !message.includes('HTTP 405')) {
+          throw error;
+        }
+      }
+    }
+
+    if (!courseId) {
+      throw new Error('Progress endpoint requires enrollmentId or courseId');
+    }
+
+    return apiRequest<CourseProgressApiResponse>(`/api/courses/${courseId}/progress/`);
+  },
+
+  updateProgress: async (params: { enrollmentId?: string; courseId?: string; data: UpdateCourseProgressPayload }) => {
+    const { enrollmentId, courseId, data } = params;
+    const payload = { method: 'POST', body: JSON.stringify(data) };
+
+    if (enrollmentId) {
+      try {
+        return await apiRequest<CourseProgressApiResponse>(`/api/users/my-courses/${enrollmentId}/progress/`, payload);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('HTTP 404') && !message.includes('HTTP 405')) {
+          throw error;
+        }
+      }
+    }
+
+    if (!courseId) {
+      throw new Error('Progress endpoint requires enrollmentId or courseId');
+    }
+
+    return apiRequest<CourseProgressApiResponse>(`/api/courses/${courseId}/progress/`, payload);
+  },
 
   getQuiz: (courseId: string, sectionIdx: number) =>
     apiRequest<any>(`/api/courses/${courseId}/quizzes/${sectionIdx}/`),
@@ -259,5 +571,27 @@ export const courseApi = {
 };
 
 export const categoryApi = {
-  list: () => apiRequest<CategoryListResponse>('/api/users/category/'),
+  list: async () => {
+    try {
+      return await apiRequest<CategoryListResponse>(CATEGORY_ENDPOINT_PATH);
+    } catch {
+      const res = await fetch(CATEGORY_ENDPOINT_ABSOLUTE, {
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      return res.json() as Promise<CategoryListResponse>;
+    }
+  },
+};
+
+export const quizApi = {
+  create: (data: CreateQuizApiPayload) =>
+    apiRequest<any>('/api/teachers/quiz/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };

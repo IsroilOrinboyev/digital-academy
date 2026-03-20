@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useAuth } from '@/app/store/AuthContext';
-import { courses } from '@/app/data/courses';
-import { categoryApi, CategoryItem, courseApi } from '@/app/services/api';
+import { categoryApi, CategoryItem, courseApi, quizApi, UserCourseItem } from '@/app/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -21,6 +20,17 @@ interface LessonFormItem {
   presentation: File | null;
 }
 
+interface QuizVariantFormItem {
+  text: string;
+  is_correct: boolean;
+}
+
+interface QuizQuestionFormItem {
+  question_text: string;
+  points: number;
+  variants: QuizVariantFormItem[];
+}
+
 interface UnitFormItem {
   title: string;
   desc: string;
@@ -37,6 +47,102 @@ interface CourseFormState {
   units: UnitFormItem[];
 }
 
+interface CourseEditFormState {
+  title: string;
+  desc: string;
+  base_price: number;
+  discount_price: number;
+  cover_img: File | null;
+}
+
+interface CourseLessonOption {
+  id: string;
+  unitId: string;
+  label: string;
+}
+
+interface CourseUnitOption {
+  id: string;
+  label: string;
+}
+
+interface QuizCreateFormState {
+  title: string;
+  description: string;
+  questions: QuizQuestionFormItem[];
+}
+
+const createEmptyQuizVariant = (isCorrect = false): QuizVariantFormItem => ({
+  text: '',
+  is_correct: isCorrect,
+});
+
+const createEmptyQuizQuestion = (): QuizQuestionFormItem => ({
+  question_text: '',
+  points: 1,
+  variants: [createEmptyQuizVariant(true), createEmptyQuizVariant(false)],
+});
+
+const createEmptyQuizCreateForm = (): QuizCreateFormState => ({
+  title: '',
+  description: '',
+  questions: [createEmptyQuizQuestion()],
+});
+
+const createEmptyLesson = (): LessonFormItem => ({
+  title: '',
+  desc: '',
+  additional_task: '',
+  video: null,
+  presentation: null,
+});
+
+function extractCourseQuizOptions(source: any): {
+  units: CourseUnitOption[];
+  lessons: CourseLessonOption[];
+} {
+  const unitOptions: CourseUnitOption[] = [];
+  const lessonOptions: CourseLessonOption[] = [];
+
+  const candidateRoots = [
+    source,
+    source?.data,
+    source?.course,
+    source?.data?.course,
+  ];
+
+  for (const root of candidateRoots) {
+    const units = root?.units;
+    if (!Array.isArray(units)) continue;
+
+    units.forEach((unit: any, unitIndex: number) => {
+      if (typeof unit?.id !== 'string' || !unit.id) return;
+      const unitLabel = unit?.title || `Unit ${unitIndex + 1}`;
+      unitOptions.push({ id: unit.id, label: unitLabel });
+
+      if (!Array.isArray(unit?.lessons)) return;
+      unit.lessons.forEach((lesson: any, lessonIndex: number) => {
+        if (typeof lesson?.id !== 'string' || !lesson.id) return;
+        const lessonLabel = lesson?.title || `Lesson ${lessonIndex + 1}`;
+        lessonOptions.push({
+          id: lesson.id,
+          unitId: unit.id,
+          label: lessonLabel,
+        });
+      });
+    });
+
+    if (unitOptions.length > 0 || lessonOptions.length > 0) {
+      break;
+    }
+  }
+
+  return {
+    units: unitOptions,
+    lessons: lessonOptions,
+  };
+}
+
 const mockChartData = [
   { month: 'Oct', enrollments: 12 },
   { month: 'Nov', enrollments: 28 },
@@ -47,9 +153,21 @@ const mockChartData = [
 ];
 
 export default function InstructorDashboard() {
-  const { user } = useAuth();
+  useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingQuiz, setIsCreatingQuiz] = useState(false);
+  const [isUpdatingCourse, setIsUpdatingCourse] = useState(false);
+  const [myCourses, setMyCourses] = useState<UserCourseItem[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<CourseEditFormState | null>(null);
+  const [quizCourseId, setQuizCourseId] = useState<string | null>(null);
+  const [quizUnitId, setQuizUnitId] = useState('');
+  const [quizUnitOptions, setQuizUnitOptions] = useState<CourseUnitOption[]>([]);
+  const [quizLessonOptions, setQuizLessonOptions] = useState<CourseLessonOption[]>([]);
+  const [quizLessonId, setQuizLessonId] = useState('');
+  const [quizForm, setQuizForm] = useState<QuizCreateFormState>(createEmptyQuizCreateForm());
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [form, setForm] = useState<CourseFormState>({
     title: '',
@@ -62,23 +180,282 @@ export default function InstructorDashboard() {
       {
         title: '',
         desc: '',
-        lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }],
+        lessons: [createEmptyLesson()],
       },
     ],
   });
 
   useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const response = await categoryApi.list();
-        setCategories(response?.data ?? []);
-      } catch (err: any) {
-        toast.error(err?.message ?? 'Categorylarni yuklab bo\'lmadi.');
+    const loadInitialData = async () => {
+      setIsLoadingCourses(true);
+      const [categoryResult, courseResult] = await Promise.allSettled([
+        categoryApi.list(),
+        courseApi.myCourses(),
+      ]);
+
+      if (categoryResult.status === 'fulfilled') {
+        setCategories(categoryResult.value?.data ?? []);
+      } else {
+        toast.error('Category ro\'yxatini yuklab bo\'lmadi.');
       }
+
+      if (courseResult.status === 'fulfilled') {
+        setMyCourses(courseResult.value?.data ?? []);
+      } else {
+        const message = (courseResult.reason as Error | undefined)?.message;
+        toast.error(message ?? 'Course ro\'yxatini yuklab bo\'lmadi.');
+        setMyCourses([]);
+      }
+
+      if (categoryResult.status === 'rejected' && courseResult.status === 'rejected') {
+        toast.error('Dashboard ma\'lumotlarini yuklab bo\'lmadi.');
+      }
+
+      setIsLoadingCourses(false);
     };
 
-    loadCategories();
+    loadInitialData();
   }, []);
+
+  const reloadMyCourses = async () => {
+    const response = await courseApi.myCourses();
+    setMyCourses(response?.data ?? []);
+  };
+
+  const startEditCourse = (course: UserCourseItem) => {
+    setEditingCourseId(course.id);
+    setEditForm({
+      title: course.title,
+      desc: course.desc,
+      base_price: Number(course.base_price),
+      discount_price: Number(course.discount_price),
+      cover_img: null,
+    });
+  };
+
+  const cancelEditCourse = () => {
+    setEditingCourseId(null);
+    setEditForm(null);
+  };
+
+  const handleUpdateCourse = async () => {
+    if (!editingCourseId || !editForm) {
+      return;
+    }
+
+    if (!editForm.title.trim() || !editForm.desc.trim()) {
+      toast.error('Title va description majburiy.');
+      return;
+    }
+
+    try {
+      setIsUpdatingCourse(true);
+      await courseApi.update(editingCourseId, {
+        title: editForm.title.trim(),
+        desc: editForm.desc.trim(),
+        base_price: Number(editForm.base_price),
+        discount_price: Number(editForm.discount_price),
+        cover_img: editForm.cover_img,
+      });
+
+      await reloadMyCourses();
+      toast.success('Course yangilandi.');
+      cancelEditCourse();
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Course update xatolik bilan tugadi.');
+    } finally {
+      setIsUpdatingCourse(false);
+    }
+  };
+
+  const startCreateQuiz = async (courseId: string) => {
+    const selectedCourse = myCourses.find(course => course.id === courseId);
+    if (!selectedCourse) {
+      toast.error('Course topilmadi. Sahifani yangilang.');
+      return;
+    }
+
+    setQuizCourseId(courseId);
+    setQuizForm(createEmptyQuizCreateForm());
+    setQuizLessonId('');
+
+    let quizOptions = extractCourseQuizOptions(selectedCourse);
+
+    // Fallback: if list payload lacks nested units/lessons, fetch detail and retry.
+    if (!quizOptions.lessons.length) {
+      try {
+        const detail = await courseApi.detail(courseId);
+        quizOptions = extractCourseQuizOptions(detail);
+      } catch {
+        // Ignore fallback error and show the standard warning below.
+      }
+    }
+
+    setQuizUnitOptions(quizOptions.units);
+    setQuizLessonOptions(quizOptions.lessons);
+    setQuizUnitId(quizOptions.units[0]?.id ?? '');
+
+    if (!quizOptions.lessons.length) {
+      toast.warning('Unit yoki lesson topilmadi. API response ni tekshirib ko\'raylik.');
+    }
+  };
+
+  const cancelCreateQuiz = () => {
+    setQuizCourseId(null);
+    setQuizUnitId('');
+    setQuizUnitOptions([]);
+    setQuizLessonId('');
+    setQuizLessonOptions([]);
+    setQuizForm(createEmptyQuizCreateForm());
+  };
+
+  const updateQuizQuestion = (
+    questionIndex: number,
+    key: 'question_text' | 'points',
+    value: string | number
+  ) => {
+    setQuizForm(prev => ({
+      ...prev,
+      questions: prev.questions.map((question, qIdx) =>
+        qIdx === questionIndex ? { ...question, [key]: value } : question
+      ),
+    }));
+  };
+
+  const addQuizQuestion = () => {
+    setQuizForm(prev => ({
+      ...prev,
+      questions: [...prev.questions, createEmptyQuizQuestion()],
+    }));
+  };
+
+  const updateQuizVariantText = (
+    questionIndex: number,
+    variantIndex: number,
+    value: string
+  ) => {
+    setQuizForm(prev => ({
+      ...prev,
+      questions: prev.questions.map((question, qIdx) => {
+        if (qIdx !== questionIndex) return question;
+        return {
+          ...question,
+          variants: question.variants.map((variant, vIdx) =>
+            vIdx === variantIndex ? { ...variant, text: value } : variant
+          ),
+        };
+      }),
+    }));
+  };
+
+  const setQuizCorrectVariant = (questionIndex: number, variantIndex: number) => {
+    setQuizForm(prev => ({
+      ...prev,
+      questions: prev.questions.map((question, qIdx) => {
+        if (qIdx !== questionIndex) return question;
+        return {
+          ...question,
+          variants: question.variants.map((variant, vIdx) => ({
+            ...variant,
+            is_correct: vIdx === variantIndex,
+          })),
+        };
+      }),
+    }));
+  };
+
+  const addQuizVariant = (questionIndex: number) => {
+    setQuizForm(prev => ({
+      ...prev,
+      questions: prev.questions.map((question, qIdx) =>
+        qIdx === questionIndex
+          ? { ...question, variants: [...question.variants, createEmptyQuizVariant(false)] }
+          : question
+      ),
+    }));
+  };
+
+  const handleCreateQuizzes = async () => {
+    if (!quizCourseId) {
+      toast.error('Avval courseni tanlang.');
+      return;
+    }
+
+    if (!quizLessonId) {
+      toast.error('Lesson tanlash majburiy.');
+      return;
+    }
+
+    const quizTitle = quizForm.title.trim();
+    const quizDescription = quizForm.description.trim();
+    if (!quizTitle || !quizDescription) {
+      toast.error('Quiz title va description majburiy.');
+      return;
+    }
+
+    if (!quizForm.questions.length) {
+      toast.error('Kamida 1 ta savol bo\'lishi kerak.');
+      return;
+    }
+
+    const normalizedQuestions = [] as Array<{ question_text: string; points: number; variants: QuizVariantFormItem[] }>;
+    for (let qIdx = 0; qIdx < quizForm.questions.length; qIdx += 1) {
+      const question = quizForm.questions[qIdx];
+
+      if (!question.question_text.trim()) {
+        toast.error(`Savol matni majburiy (Savol ${qIdx + 1}).`);
+        return;
+      }
+
+      if (!Number.isFinite(question.points) || Number(question.points) <= 0) {
+        toast.error(`Points 1 dan katta bo'lishi kerak (Savol ${qIdx + 1}).`);
+        return;
+      }
+
+      if (question.variants.length < 2) {
+        toast.error(`Har bir savolda kamida 2 ta variant bo'lishi kerak (Savol ${qIdx + 1}).`);
+        return;
+      }
+
+      const trimmedVariants = question.variants.map(variant => ({
+        text: variant.text.trim(),
+        is_correct: variant.is_correct,
+      }));
+
+      if (trimmedVariants.some(variant => !variant.text)) {
+        toast.error(`Variant text majburiy (Savol ${qIdx + 1}).`);
+        return;
+      }
+
+      const correctCount = trimmedVariants.filter(variant => variant.is_correct).length;
+      if (correctCount !== 1) {
+        toast.error(`Har savolda aynan 1 ta to'g'ri javob bo'lishi kerak (Savol ${qIdx + 1}).`);
+        return;
+      }
+
+      normalizedQuestions.push({
+        question_text: question.question_text.trim(),
+        points: Number(question.points),
+        variants: trimmedVariants,
+      });
+    }
+
+    try {
+      setIsCreatingQuiz(true);
+      await quizApi.create({
+        lesson: quizLessonId,
+        title: quizTitle,
+        description: quizDescription,
+        questions: normalizedQuestions,
+      });
+      toast.success('Quiz yaratildi.');
+      cancelCreateQuiz();
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Quiz yaratishda xatolik yuz berdi.');
+    } finally {
+      setIsCreatingQuiz(false);
+    }
+  };
 
   const updateUnit = (unitIndex: number, key: 'title' | 'desc', value: string) => {
     setForm(prev => ({
@@ -133,7 +510,7 @@ export default function InstructorDashboard() {
       ...prev,
       units: [
         ...prev.units,
-        { title: '', desc: '', lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }] },
+        { title: '', desc: '', lessons: [createEmptyLesson()] },
       ],
     }));
   };
@@ -143,7 +520,7 @@ export default function InstructorDashboard() {
       ...prev,
       units: prev.units.map((unit, idx) =>
         idx === unitIndex
-          ? { ...unit, lessons: [...unit.lessons, { title: '', desc: '', additional_task: '', video: null, presentation: null }] }
+          ? { ...unit, lessons: [...unit.lessons, createEmptyLesson()] }
           : unit
       ),
     }));
@@ -195,6 +572,8 @@ export default function InstructorDashboard() {
         })),
       });
 
+      await reloadMyCourses();
+
       toast.success('Course muvaffaqiyatli yaratildi.');
       setForm({
         title: '',
@@ -203,7 +582,7 @@ export default function InstructorDashboard() {
         discount_price: 0,
         category: '',
         cover_img: null,
-        units: [{ title: '', desc: '', lessons: [{ title: '', desc: '', additional_task: '', video: null, presentation: null }] }],
+        units: [{ title: '', desc: '', lessons: [createEmptyLesson()] }],
       });
       setActiveTab('courses');
     } catch (err: any) {
@@ -212,32 +591,24 @@ export default function InstructorDashboard() {
       setIsCreating(false);
     }
   };
-  // In demo mode, show all courses since mock data has pre-set instructor names
-  const matchedCourses = courses.filter(c => c.instructor === user?.name);
-  const instructorCourses = matchedCourses.length > 0 ? matchedCourses : courses;
-  const isDemo = matchedCourses.length === 0;
-
-  const totalStudents = instructorCourses.reduce((sum, c) => sum + c.students, 0);
-  const avgRating = instructorCourses.length
-    ? (instructorCourses.reduce((sum, c) => sum + c.rating, 0) / instructorCourses.length).toFixed(1)
-    : '–';
-  const revenue = instructorCourses.reduce((sum, c) => sum + c.price * c.students * 0.37, 0);
+  const totalCourses = myCourses.length;
+  const totalBasePrice = myCourses.reduce((sum, course) => sum + Number(course.base_price || 0), 0);
+  const totalDiscountPrice = myCourses.reduce((sum, course) => sum + Number(course.discount_price || 0), 0);
+  const totalDiscountValue = totalBasePrice - totalDiscountPrice;
+  const filteredQuizLessonOptions = quizUnitId
+    ? quizLessonOptions.filter(lesson => lesson.unitId === quizUnitId)
+    : quizLessonOptions;
 
   const stats = [
-    { label: 'Total Students', value: totalStudents.toLocaleString(), icon: <Users className="w-5 h-5 text-blue-500" /> },
-    { label: 'Total Courses', value: instructorCourses.length, icon: <BookOpen className="w-5 h-5 text-purple-500" /> },
-    { label: 'Avg Rating', value: avgRating, icon: <Star className="w-5 h-5 text-yellow-500" /> },
-    { label: 'Revenue', value: `$${revenue.toFixed(0)}`, icon: <TrendingUp className="w-5 h-5 text-green-500" /> },
+    { label: 'Total Courses', value: totalCourses.toLocaleString(), icon: <BookOpen className="w-5 h-5 text-purple-500" /> },
+    { label: 'Total Base Price', value: totalBasePrice.toLocaleString(), icon: <Users className="w-5 h-5 text-blue-500" /> },
+    { label: 'Total Discount Price', value: totalDiscountPrice.toLocaleString(), icon: <Star className="w-5 h-5 text-yellow-500" /> },
+    { label: 'Discount Value', value: totalDiscountValue.toLocaleString(), icon: <TrendingUp className="w-5 h-5 text-green-500" /> },
   ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-4">Instructor Dashboard</h1>
-      {isDemo && (
-        <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 text-sm text-purple-800">
-          <strong>Demo mode:</strong> Showing sample courses. Create your own courses using the &ldquo;Create Course&rdquo; tab.
-        </div>
-      )}
       <div className="flex gap-4 mb-8 border-b">
         {(['overview', 'courses', 'create'] as Tab[]).map(tab => (
           <button
@@ -286,26 +657,225 @@ export default function InstructorDashboard() {
 
       {activeTab === 'courses' && (
         <div>
-          <h2 className="text-xl font-bold mb-4">My Courses ({instructorCourses.length})</h2>
-          {instructorCourses.length === 0 ? null : (
+          <h2 className="text-xl font-bold mb-4">My Courses ({myCourses.length})</h2>
+
+          {isLoadingCourses && (
+            <p className="text-sm text-gray-600">Course list yuklanmoqda...</p>
+          )}
+
+          {!isLoadingCourses && myCourses.length === 0 && (
+            <p className="text-sm text-gray-600">Hozircha course yo'q.</p>
+          )}
+
+          {!isLoadingCourses && myCourses.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
                     <th className="text-left py-3">Course</th>
-                    <th className="text-left py-3">Students</th>
-                    <th className="text-left py-3">Rating</th>
-                    <th className="text-left py-3">Price</th>
+                    <th className="text-left py-3">Base Price</th>
+                    <th className="text-left py-3">Discount Price</th>
+                    <th className="text-left py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {instructorCourses.map(c => (
-                    <tr key={c.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 font-medium">{c.title}</td>
-                      <td className="py-3">{c.students.toLocaleString()}</td>
-                      <td className="py-3">{c.rating.toFixed(1)} ⭐</td>
-                      <td className="py-3">${c.price}</td>
-                    </tr>
+                  {myCourses.map(course => (
+                    <Fragment key={course.id}>
+                      <tr className="border-b hover:bg-gray-50">
+                        <td className="py-3 font-medium">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={course.cover_img ?? 'https://placehold.co/120x70?text=No+Image'}
+                              alt={course.title}
+                              className="w-16 h-10 object-cover rounded border"
+                            />
+                            <div>
+                              <p className="font-medium">{course.title}</p>
+                              <p className="text-xs text-gray-500 line-clamp-1">{course.desc}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3">{Number(course.base_price).toLocaleString()}</td>
+                        <td className="py-3">{Number(course.discount_price).toLocaleString()}</td>
+                        <td className="py-3">
+                          <div className="flex gap-2">
+                            <Button type="button" variant="outline" onClick={() => startEditCourse(course)}>
+                              Update
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => startCreateQuiz(course.id)}>
+                              Create Quiz
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {editingCourseId === course.id && editForm && (
+                        <tr className="border-b bg-gray-50">
+                          <td colSpan={4} className="py-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <Input
+                                value={editForm.title}
+                                onChange={e => setEditForm(prev => (prev ? { ...prev, title: e.target.value } : prev))}
+                                placeholder="Title"
+                              />
+                              <Input
+                                type="number"
+                                min="0"
+                                value={editForm.base_price}
+                                onChange={e => setEditForm(prev => (prev ? { ...prev, base_price: Number(e.target.value) } : prev))}
+                                placeholder="Base price"
+                              />
+                              <Input
+                                type="number"
+                                min="0"
+                                value={editForm.discount_price}
+                                onChange={e => setEditForm(prev => (prev ? { ...prev, discount_price: Number(e.target.value) } : prev))}
+                                placeholder="Discount price"
+                              />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="w-full text-sm"
+                                onChange={e => setEditForm(prev => (prev ? { ...prev, cover_img: e.target.files?.[0] ?? null } : prev))}
+                              />
+                              <div className="md:col-span-2">
+                                <Textarea
+                                  value={editForm.desc}
+                                  onChange={e => setEditForm(prev => (prev ? { ...prev, desc: e.target.value } : prev))}
+                                  placeholder="Description"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 mt-3">
+                              <Button
+                                type="button"
+                                className="bg-purple-600 hover:bg-purple-700"
+                                disabled={isUpdatingCourse}
+                                onClick={handleUpdateCourse}
+                              >
+                                {isUpdatingCourse ? 'Updating...' : 'Save Update'}
+                              </Button>
+                              <Button type="button" variant="outline" onClick={cancelEditCourse}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+
+                      {quizCourseId === course.id && (
+                        <tr className="border-b bg-gray-50">
+                          <td colSpan={4} className="py-3">
+                            <div className="space-y-3">
+                              <p className="text-sm font-semibold">Create Quiz</p>
+
+                              <select
+                                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={quizUnitId}
+                                onChange={e => {
+                                  const unitId = e.target.value;
+                                  setQuizUnitId(unitId);
+                                  setQuizLessonId('');
+                                }}
+                              >
+                                <option value="">Unit tanlang</option>
+                                {quizUnitOptions.map(unit => (
+                                  <option key={unit.id} value={unit.id}>
+                                    {unit.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <select
+                                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={quizLessonId}
+                                onChange={e => setQuizLessonId(e.target.value)}
+                              >
+                                <option value="">Lesson tanlang</option>
+                                {filteredQuizLessonOptions.map(lesson => (
+                                  <option key={lesson.id} value={lesson.id}>
+                                    {lesson.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <Input
+                                placeholder="Quiz title"
+                                value={quizForm.title}
+                                onChange={e => setQuizForm(prev => ({ ...prev, title: e.target.value }))}
+                              />
+                              <Textarea
+                                placeholder="Quiz description"
+                                value={quizForm.description}
+                                onChange={e => setQuizForm(prev => ({ ...prev, description: e.target.value }))}
+                              />
+
+                              {quizForm.questions.map((question, questionIndex) => (
+                                <div key={questionIndex} className="rounded-md border p-3 bg-white space-y-2">
+                                  <p className="text-xs font-semibold text-gray-600">Savol {questionIndex + 1}</p>
+                                  <Input
+                                    placeholder="Question text"
+                                    value={question.question_text}
+                                    onChange={e => updateQuizQuestion(questionIndex, 'question_text', e.target.value)}
+                                  />
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={question.points}
+                                    onChange={e => updateQuizQuestion(questionIndex, 'points', Number(e.target.value))}
+                                  />
+
+                                  {question.variants.map((variant, variantIndex) => (
+                                    <div key={variantIndex} className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center">
+                                      <Input
+                                        placeholder={`Variant ${variantIndex + 1}`}
+                                        value={variant.text}
+                                        onChange={e => updateQuizVariantText(questionIndex, variantIndex, e.target.value)}
+                                      />
+                                      <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                                        <input
+                                          type="radio"
+                                          name={`course-quiz-correct-${questionIndex}`}
+                                          checked={variant.is_correct}
+                                          onChange={() => setQuizCorrectVariant(questionIndex, variantIndex)}
+                                        />
+                                        To'g'ri javob
+                                      </label>
+                                    </div>
+                                  ))}
+
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => addQuizVariant(questionIndex)}
+                                  >
+                                    Variant qo'shish
+                                  </Button>
+                                </div>
+                              ))}
+
+                              <div className="flex gap-2">
+                                <Button type="button" variant="outline" onClick={addQuizQuestion}>
+                                  Savol qo'shish
+                                </Button>
+                                <Button
+                                  type="button"
+                                  className="bg-purple-600 hover:bg-purple-700"
+                                  disabled={isCreatingQuiz}
+                                  onClick={handleCreateQuizzes}
+                                >
+                                  {isCreatingQuiz ? 'Creating...' : 'Create Quiz'}
+                                </Button>
+                                <Button type="button" variant="outline" onClick={cancelCreateQuiz}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -428,6 +998,7 @@ export default function InstructorDashboard() {
                         value={lesson.additional_task}
                         onChange={e => updateLesson(unitIndex, lessonIndex, 'additional_task', e.target.value)}
                       />
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <Label className="text-xs text-gray-600">Video (optional)</Label>

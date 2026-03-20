@@ -1,49 +1,123 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { CourseCard } from '../components/CourseCard';
 import { courses, categories } from '../data/courses';
 import { Button } from '../components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { FilterSidebar } from '../components/FilterSidebar';
 import { X, BookOpen } from 'lucide-react';
+import { categoryApi, courseApi } from '@/app/services/api';
+import { mapApiCourseToCourse } from '@/app/utils/courseMapper';
+import { CategoryIconKey, getCategoryVisuals } from '@/app/utils/categoryVisuals';
+
+interface CourseCategoryFilter {
+  id: string;
+  name: string;
+  iconKey: CategoryIconKey;
+}
 
 export function CourseListing() {
   const [searchParams] = useSearchParams();
   const categoryFilter = searchParams.get('category');
+  const defaultPriceBounds: [number, number] = [0, 150];
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     categoryFilter ? [categoryFilter] : []
   );
-  const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
-  const [priceRange, setPriceRange] = useState([0, 150]);
-  const [sortBy, setSortBy] = useState('popular');
+  const [priceBounds, setPriceBounds] = useState<[number, number]>(defaultPriceBounds);
+  const [priceRange, setPriceRange] = useState<[number, number]>(defaultPriceBounds);
+  const [apiCourses, setApiCourses] = useState(courses);
+  const [availableCategories, setAvailableCategories] = useState<CourseCategoryFilter[]>(
+    categories.map((item) => ({
+      id: item.id,
+      name: item.name,
+      iconKey: getCategoryVisuals(item.name, item.id).iconKey,
+    }))
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    categoryApi
+      .list()
+      .then((response) => {
+        if (!active || !Array.isArray(response?.data) || response.data.length === 0) return;
+        setAvailableCategories(
+          response.data.map((item) => ({
+            id: item.id,
+            name: item.title,
+            iconKey: getCategoryVisuals(item.title, item.slug).iconKey,
+          }))
+        );
+      })
+      .catch(() => {
+        // Keep local category list if category API is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    courseApi
+      .userCourses({
+        category: selectedCategories.length ? selectedCategories : undefined,
+        price_min: priceRange[0] > priceBounds[0] ? priceRange[0] : undefined,
+        price_max: priceRange[1] < priceBounds[1] ? priceRange[1] : undefined,
+      })
+      .then((response) => {
+        if (!active || !Array.isArray(response?.data)) return;
+        const mappedCourses = response.data.map(mapApiCourseToCourse);
+        setApiCourses(mappedCourses);
+
+        const prices = mappedCourses
+          .map((course) => Number(course.price))
+          .filter((value) => Number.isFinite(value));
+
+        if (prices.length > 0) {
+          const nextMin = Math.floor(Math.min(...prices));
+          const nextMax = Math.ceil(Math.max(...prices));
+          const bounds: [number, number] = [nextMin, Math.max(nextMax, nextMin + 1)];
+          setPriceBounds(bounds);
+          setPriceRange((prev) => {
+            const isInitial = prev[0] === defaultPriceBounds[0] && prev[1] === defaultPriceBounds[1];
+            if (isInitial) return bounds;
+            const clampedMin = Math.max(bounds[0], prev[0]);
+            const clampedMax = Math.min(bounds[1], prev[1]);
+            if (clampedMin > clampedMax) return bounds;
+            return [clampedMin, clampedMax];
+          });
+        }
+
+        localStorage.setItem('da_public_courses_cache', JSON.stringify(mappedCourses));
+      })
+      .catch(() => {
+        // Keep local fallback data if API is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCategories, priceRange]);
 
   const toggleCategory = (id: string) =>
     setSelectedCategories(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
 
-  const toggleLevel = (level: string) =>
-    setSelectedLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]);
-
   const resetFilters = () => {
     setSelectedCategories([]);
-    setSelectedLevels([]);
-    setPriceRange([0, 150]);
+    setPriceRange(priceBounds);
   };
 
-  let filteredCourses = courses.filter(course => {
-    if (selectedCategories.length > 0 && !selectedCategories.includes(course.category)) return false;
-    if (selectedLevels.length > 0 && !selectedLevels.includes(course.level)) return false;
-    if (course.price < priceRange[0] || course.price > priceRange[1]) return false;
-    return true;
+  const filteredCourses = apiCourses.filter((course) => {
+    const price = Number(course.price);
+    if (!Number.isFinite(price)) return true;
+    return price >= priceRange[0] && price <= priceRange[1];
   });
 
-  if (sortBy === 'price-low') filteredCourses.sort((a, b) => a.price - b.price);
-  else if (sortBy === 'price-high') filteredCourses.sort((a, b) => b.price - a.price);
-  else if (sortBy === 'rating') filteredCourses.sort((a, b) => b.rating - a.rating);
-  else if (sortBy === 'newest') filteredCourses.sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));
-
-  const activeCategoryNames = selectedCategories.map(id => categories.find(c => c.id === id)?.name ?? id);
-  const hasActiveFilters = selectedCategories.length > 0 || selectedLevels.length > 0 || priceRange[0] > 0 || priceRange[1] < 150;
+  const activeCategoryNames = selectedCategories.map(id => availableCategories.find(c => c.id === id)?.name ?? id);
+  const hasActiveFilters = selectedCategories.length > 0 || priceRange[0] > priceBounds[0] || priceRange[1] < priceBounds[1];
 
   return (
     <div className="min-h-screen bg-gray-50/40">
@@ -52,7 +126,7 @@ export function CourseListing() {
         <div className="max-w-[1400px] mx-auto px-6 py-8">
           <h1 className="text-3xl font-bold mb-1">All Courses</h1>
           <p className="text-gray-500 text-sm">
-            Discover your next skill — {courses.length} courses available
+            Discover your next skill — {apiCourses.length} courses available
           </p>
           {/* Active filter pills */}
           {hasActiveFilters && (
@@ -61,23 +135,18 @@ export function CourseListing() {
               {activeCategoryNames.map(name => (
                 <span key={name} className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs font-medium px-2.5 py-1 rounded-full">
                   {name}
-                  <button onClick={() => toggleCategory(categories.find(c => c.name === name)!.id)}>
+                  <button onClick={() => {
+                    const category = availableCategories.find((item) => item.name === name);
+                    if (category) toggleCategory(category.id);
+                  }}>
                     <X className="w-3 h-3" />
                   </button>
                 </span>
               ))}
-              {selectedLevels.map(level => (
-                <span key={level} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">
-                  {level}
-                  <button onClick={() => toggleLevel(level)}>
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-              {(priceRange[0] > 0 || priceRange[1] < 150) && (
+              {(priceRange[0] > priceBounds[0] || priceRange[1] < priceBounds[1]) && (
                 <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full">
                   ${priceRange[0]}–${priceRange[1]}
-                  <button onClick={() => setPriceRange([0, 150])}>
+                  <button onClick={() => setPriceRange(priceBounds)}>
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -93,12 +162,18 @@ export function CourseListing() {
       <div className="max-w-[1400px] mx-auto px-6 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           <FilterSidebar
+            categories={availableCategories}
             selectedCategories={selectedCategories}
-            selectedLevels={selectedLevels}
             priceRange={priceRange}
+            minPrice={priceBounds[0]}
+            maxPrice={priceBounds[1]}
             onToggleCategory={toggleCategory}
-            onToggleLevel={toggleLevel}
-            onPriceRangeChange={setPriceRange}
+            onPriceRangeChange={(value) => {
+              const min = Number(value[0]);
+              const max = Number(value[1]);
+              if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+              setPriceRange([min, max]);
+            }}
             onReset={resetFilters}
           />
 
@@ -108,21 +183,7 @@ export function CourseListing() {
               <p className="text-sm text-gray-600 font-medium">
                 <span className="text-gray-900 font-bold">{filteredCourses.length}</span> courses found
               </p>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 hidden sm:inline">Sort by</span>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-44 h-8 text-sm border-gray-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="popular">Most Popular</SelectItem>
-                    <SelectItem value="rating">Highest Rated</SelectItem>
-                    <SelectItem value="newest">Newest</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                    <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <span className="text-xs text-gray-500">Filtered by backend</span>
             </div>
 
             {filteredCourses.length > 0 ? (

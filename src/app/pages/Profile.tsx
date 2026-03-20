@@ -7,8 +7,8 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { User, Lock, Bell, Eye, EyeOff, Camera, BookOpen, Receipt, Award, Play } from 'lucide-react';
-import { authApi } from '@/app/services/api';
-import { courses } from '@/app/data/courses';
+import { authApi, courseApi } from '@/app/services/api';
+import { courses, Course } from '@/app/data/courses';
 import { Link, useSearchParams } from 'react-router';
 
 type Tab = 'profile' | 'courses' | 'payments' | 'credentials' | 'security' | 'notifications';
@@ -16,16 +16,26 @@ type Tab = 'profile' | 'courses' | 'payments' | 'credentials' | 'security' | 'no
 interface ProfileForm { name: string; email: string; bio: string; }
 interface PasswordForm { currentPassword: string; newPassword: string; confirmPassword: string; }
 
-function getCourseProgress(courseId: string): { completed: number; total: number; pct: number } {
+interface ProfileEnrolledCourse {
+  enrollmentId: string;
+  courseId: string;
+  progress: number;
+  status: string;
+  title: string;
+  instructor: string;
+  image: string;
+  totalLectures: number;
+}
+
+function loadCachedPublicCourses(): Course[] {
   try {
-    const stored = localStorage.getItem(`progress_${courseId}`);
-    const allCourse = courses.find(c => c.id === courseId);
-    const total = allCourse?.curriculum.reduce((s, sec) => s + sec.lectures, 0) ?? 0;
-    if (!stored) return { completed: 0, total, pct: 0 };
-    const { completedLectures } = JSON.parse(stored) as { completedLectures: string[] };
-    const completed = completedLectures.length;
-    return { completed, total, pct: total > 0 ? Math.round((completed / total) * 100) : 0 };
-  } catch { return { completed: 0, total: 0, pct: 0 }; }
+    const raw = localStorage.getItem('da_public_courses_cache');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Course[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export default function Profile() {
@@ -38,17 +48,65 @@ export default function Profile() {
   const [showNewPw, setShowNewPw] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notifPrefs, setNotifPrefs] = useState({ courseUpdates: true, enrollments: true, promotional: false, weeklyDigest: true });
+  const [enrolledCourses, setEnrolledCourses] = useState<ProfileEnrolledCourse[]>([]);
+  const [loadingEnrolledCourses, setLoadingEnrolledCourses] = useState(true);
 
   const profileForm = useForm<ProfileForm>({ defaultValues: { name: user?.name || '', email: user?.email || '', bio: user?.bio || '' } });
   const passwordForm = useForm<PasswordForm>();
-
-  const enrolledCourses = courses.filter(c => user?.enrolledCourseIds?.includes(c.id));
 
   // Sync tab from URL param when it changes
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab;
     if (tab) setActiveTab(tab);
   }, [searchParams]);
+
+  useEffect(() => {
+    const loadMyCourses = async () => {
+      setLoadingEnrolledCourses(true);
+      try {
+        const [myCoursesRes, publicRes] = await Promise.all([
+          courseApi.myEnrolledCourses(),
+          courseApi.userCourses().catch(() => null),
+        ]);
+
+        const publicCoursesFromApi = publicRes?.data?.map((item) => ({
+          id: item.id,
+          title: item.title,
+          instructor: 'Digital Academy',
+          image:
+            item.cover_img ||
+            'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1080&q=80',
+        })) ?? [];
+
+        const cached = loadCachedPublicCourses();
+        const allSources = [...courses, ...cached];
+
+        const list: ProfileEnrolledCourse[] = (myCoursesRes.data ?? []).map((item) => {
+          const fromPublicApi = publicCoursesFromApi.find((c) => c.id === item.course);
+          const fromLocal = allSources.find((c) => c.id === item.course);
+
+          return {
+            enrollmentId: item.id,
+            courseId: item.course,
+            progress: Math.max(0, Math.min(100, Number(item.progress) || 0)),
+            status: item.status,
+            title: fromPublicApi?.title ?? fromLocal?.title ?? 'Untitled course',
+            instructor: fromPublicApi?.instructor ?? fromLocal?.instructor ?? 'Digital Academy',
+            image: fromPublicApi?.image ?? fromLocal?.image ?? 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1080&q=80',
+            totalLectures: fromLocal?.curriculum?.reduce((s, sec) => s + sec.lectures, 0) ?? 0,
+          };
+        });
+
+        setEnrolledCourses(list);
+      } catch {
+        setEnrolledCourses([]);
+      } finally {
+        setLoadingEnrolledCourses(false);
+      }
+    };
+
+    loadMyCourses();
+  }, []);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -186,7 +244,9 @@ export default function Profile() {
                   <Button size="sm" variant="outline">Browse More Courses</Button>
                 </Link>
               </div>
-              {enrolledCourses.length === 0 ? (
+              {loadingEnrolledCourses ? (
+                <div className="text-center py-16 bg-gray-50 rounded-xl text-gray-500">Loading my courses...</div>
+              ) : enrolledCourses.length === 0 ? (
                 <div className="text-center py-16 bg-gray-50 rounded-xl">
                   <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No courses yet</h3>
@@ -198,9 +258,11 @@ export default function Profile() {
               ) : (
                 <div className="space-y-4">
                   {enrolledCourses.map(course => {
-                    const { completed, total, pct } = getCourseProgress(course.id);
+                    const pct = course.progress;
+                    const total = course.totalLectures;
+                    const completed = total > 0 ? Math.round((pct / 100) * total) : 0;
                     return (
-                      <Card key={course.id}>
+                      <Card key={course.enrollmentId}>
                         <CardContent className="p-4 flex gap-4">
                           <img src={course.image} alt={course.title} className="w-28 h-18 object-cover rounded-lg flex-shrink-0" style={{ height: '72px' }} />
                           <div className="flex-1 min-w-0">
@@ -209,17 +271,19 @@ export default function Profile() {
                             <div className="bg-gray-200 rounded-full h-2 w-full mb-1">
                               <div className="bg-purple-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
                             </div>
-                            <p className="text-xs text-gray-500">{pct}% complete · {completed}/{total} lectures</p>
+                            <p className="text-xs text-gray-500">
+                              {pct}% complete{total > 0 ? ` · ${completed}/${total} lectures` : ''}
+                            </p>
                           </div>
                           <div className="flex-shrink-0 flex flex-col gap-2">
-                            <Link to={`/learn/${course.id}`}>
+                            <Link to={`/learn/${course.enrollmentId}`}>
                               <Button size="sm" className="bg-purple-600 hover:bg-purple-700 w-full">
                                 <Play className="w-3 h-3 mr-1" />
                                 {pct > 0 ? 'Continue' : 'Start'}
                               </Button>
                             </Link>
                             {pct === 100 && (
-                              <Link to={`/certificate/${course.id}`}>
+                              <Link to={`/certificate/${course.courseId}`}>
                                 <Button size="sm" variant="outline" className="w-full text-xs border-green-500 text-green-700 hover:bg-green-50">
                                   <Award className="w-3 h-3 mr-1" />
                                   Certificate
@@ -300,7 +364,9 @@ export default function Profile() {
               <h2 className="text-xl font-bold mb-2">Credentials & Certificates</h2>
               <p className="text-gray-500 text-sm mb-6">Complete a course to earn a certificate of completion.</p>
 
-              {enrolledCourses.length === 0 ? (
+              {loadingEnrolledCourses ? (
+                <div className="text-center py-16 bg-gray-50 rounded-xl text-gray-500">Loading credentials...</div>
+              ) : enrolledCourses.length === 0 ? (
                 <div className="text-center py-16 bg-gray-50 rounded-xl">
                   <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No credentials yet</h3>
@@ -312,10 +378,10 @@ export default function Profile() {
               ) : (
                 <div className="space-y-4">
                   {enrolledCourses.map(course => {
-                    const { pct } = getCourseProgress(course.id);
+                    const pct = course.progress;
                     const completed = pct === 100;
                     return (
-                      <Card key={course.id} className={completed ? 'border-green-200 bg-green-50/30' : ''}>
+                      <Card key={course.enrollmentId} className={completed ? 'border-green-200 bg-green-50/30' : ''}>
                         <CardContent className="p-4 flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${completed ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
                             <Award className="w-6 h-6" />
@@ -337,13 +403,13 @@ export default function Profile() {
                           </div>
                           <div className="flex-shrink-0">
                             {completed ? (
-                              <Link to={`/certificate/${course.id}`}>
+                              <Link to={`/certificate/${course.courseId}`}>
                                 <Button size="sm" className="bg-green-600 hover:bg-green-700">
                                   <Award className="w-3 h-3 mr-1" /> View Certificate
                                 </Button>
                               </Link>
                             ) : (
-                              <Link to={`/learn/${course.id}`}>
+                              <Link to={`/learn/${course.enrollmentId}`}>
                                 <Button size="sm" variant="outline">
                                   <Play className="w-3 h-3 mr-1" /> Continue
                                 </Button>

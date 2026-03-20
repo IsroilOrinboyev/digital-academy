@@ -16,7 +16,7 @@ export function CourseCard({ course }: CourseCardProps) {
     : null;
 
   return (
-    <Link to={`/course/${course.id}`} className="group block h-full">
+    <Link to={`/course/${course.id}`} state={{ course }} className="group block h-full">
       <Card className="hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col group-hover:-translate-y-0.5 border-gray-100">
         {/* Thumbnail */}
         <div className="relative aspect-video overflow-hidden bg-gray-100 shrink-0">
@@ -45,34 +45,34 @@ export function CourseCard({ course }: CourseCardProps) {
         </div>
 
         <CardContent className="p-4 flex flex-col flex-1">
-          <h3 className="font-semibold text-sm leading-snug line-clamp-2 mb-1.5 group-hover:text-purple-600 transition-colors">
+          <h3 className="font-semibold text-base leading-snug line-clamp-2 mb-1.5 group-hover:text-purple-600 transition-colors">
             {course.title}
           </h3>
-          <p className="text-xs text-gray-500 mb-2 truncate">{course.instructor}</p>
+          <p className="text-sm text-gray-500 mb-2 truncate">{course.instructor}</p>
 
           <div className="flex items-center gap-1.5 mb-2">
-            <span className="text-xs font-bold text-amber-600">{course.rating.toFixed(1)}</span>
+            <span className="text-sm font-bold text-amber-600">{course.rating.toFixed(1)}</span>
             <div className="flex items-center">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className={`w-3 h-3 ${i < Math.floor(course.rating) ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}`} />
               ))}
             </div>
-            <span className="text-xs text-gray-400">({course.reviewCount.toLocaleString()})</span>
+            <span className="text-sm text-gray-400">({course.reviewCount.toLocaleString()})</span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-gray-400 mb-3">
+          <div className="flex items-center gap-3 text-sm text-gray-400 mb-3">
             <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{course.duration}</span>
             <span className="flex items-center gap-1"><Users className="w-3 h-3" />{course.students.toLocaleString()}</span>
           </div>
 
           <div className="mt-auto pt-3 border-t border-gray-50 flex items-center justify-between">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-bold text-gray-900">${course.price}</span>
+              <span className="text-xl font-bold text-gray-900">${course.price}</span>
               {course.originalPrice && (
-                <span className="text-xs text-gray-400 line-through">${course.originalPrice}</span>
+                <span className="text-sm text-gray-400 line-through">${course.originalPrice}</span>
               )}
             </div>
-            <Badge variant="secondary" className="text-xs">{course.level}</Badge>
+            <Badge variant="secondary" className="text-sm">{course.level}</Badge>
           </div>
         </CardContent>
       </Card>

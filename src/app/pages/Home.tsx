@@ -1,9 +1,34 @@
 import { Link, useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/button';
 import { CourseCard } from '../components/CourseCard';
 import { courses, categories } from '../data/courses';
-import { ArrowRight, CheckCircle, GraduationCap, BookOpen, Globe, TrendingUp, DollarSign, Users, BarChart3 } from 'lucide-react';
+import { ArrowRight, CheckCircle, GraduationCap, BookOpen, Globe, TrendingUp, DollarSign, Users, BarChart3, Code2, Briefcase, Palette, Camera, Music2, Dumbbell, Sparkles, Tag } from 'lucide-react';
 import { useAuth } from '@/app/store/AuthContext';
+import { categoryApi, courseApi } from '@/app/services/api';
+import { mapApiCourseToCourse } from '@/app/utils/courseMapper';
+import { CategoryIconKey, getCategoryVisuals } from '@/app/utils/categoryVisuals';
+
+interface HomeCategoryItem {
+  id: string;
+  name: string;
+  iconKey: CategoryIconKey;
+  colorKey: string;
+}
+
+function CategoryIcon({ iconKey, className }: { iconKey: CategoryIconKey; className?: string }) {
+  const iconClass = className ?? 'w-6 h-6';
+
+  if (iconKey === 'code') return <Code2 className={iconClass} />;
+  if (iconKey === 'briefcase') return <Briefcase className={iconClass} />;
+  if (iconKey === 'palette') return <Palette className={iconClass} />;
+  if (iconKey === 'trending') return <TrendingUp className={iconClass} />;
+  if (iconKey === 'camera') return <Camera className={iconClass} />;
+  if (iconKey === 'music') return <Music2 className={iconClass} />;
+  if (iconKey === 'dumbbell') return <Dumbbell className={iconClass} />;
+  if (iconKey === 'sparkles') return <Sparkles className={iconClass} />;
+  return <Tag className={iconClass} />;
+}
 
 const categoryColors: Record<string, { bg: string; hover: string; iconBg: string; text: string }> = {
   development: { bg: 'bg-blue-50',    hover: 'hover:bg-blue-100 hover:border-blue-200',   iconBg: 'bg-blue-100',    text: 'text-blue-700' },
@@ -14,13 +39,73 @@ const categoryColors: Record<string, { bg: string; hover: string; iconBg: string
   music:       { bg: 'bg-purple-50',  hover: 'hover:bg-purple-100 hover:border-purple-200',  iconBg: 'bg-purple-100',  text: 'text-purple-700' },
   fitness:     { bg: 'bg-red-50',     hover: 'hover:bg-red-100 hover:border-red-200',     iconBg: 'bg-red-100',     text: 'text-red-700' },
   lifestyle:   { bg: 'bg-teal-50',    hover: 'hover:bg-teal-100 hover:border-teal-200',    iconBg: 'bg-teal-100',    text: 'text-teal-700' },
+  default:     { bg: 'bg-slate-50',   hover: 'hover:bg-slate-100 hover:border-slate-200',   iconBg: 'bg-slate-100',   text: 'text-slate-700' },
 };
 
 export function Home() {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const featuredCourses = courses.filter(c => c.bestseller).slice(0, 4);
-  const popularCourses = courses.slice(0, 8);
+  const [homeCourses, setHomeCourses] = useState(courses);
+  const [homeCategories, setHomeCategories] = useState<HomeCategoryItem[]>(
+    categories.map((item) => ({
+      id: item.id,
+      name: item.name,
+      iconKey: getCategoryVisuals(item.name, item.id).iconKey,
+      colorKey: getCategoryVisuals(item.name, item.id).colorKey,
+    }))
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    categoryApi
+      .list()
+      .then((response) => {
+        if (!active || !Array.isArray(response?.data) || response.data.length === 0) return;
+        setHomeCategories(
+          response.data.map((item) => {
+            const visuals = getCategoryVisuals(item.title, item.slug);
+            return {
+              id: item.id,
+              name: item.title,
+              iconKey: visuals.iconKey,
+              colorKey: visuals.colorKey,
+            };
+          })
+        );
+      })
+      .catch(() => {
+        // Keep static fallback categories if API is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    courseApi
+      .userCourses()
+      .then((response) => {
+        if (!active || !response?.data?.length) return;
+        const mappedCourses = response.data.map(mapApiCourseToCourse);
+        setHomeCourses(mappedCourses);
+        localStorage.setItem('da_public_courses_cache', JSON.stringify(mappedCourses));
+      })
+      .catch(() => {
+        // Keep static fallback if API is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const featuredPool = homeCourses.filter(c => c.bestseller);
+  const featuredCourses = (featuredPool.length > 0 ? featuredPool : homeCourses).slice(0, 4);
+  const popularCourses = homeCourses.slice(0, 8);
 
   return (
     <div>
@@ -34,10 +119,10 @@ export function Home() {
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse shrink-0" />
                 Trusted by 65M+ learners worldwide
               </div>
-              <h1 className="text-5xl lg:text-6xl font-bold leading-tight mb-6 tracking-tight">
+              <h1 className="text-6xl lg:text-7xl font-bold leading-tight mb-6 tracking-tight">
                 Learn Without<br />Limits
               </h1>
-              <p className="text-lg lg:text-xl text-purple-100 mb-10 leading-relaxed max-w-lg">
+              <p className="text-xl lg:text-2xl text-purple-100 mb-10 leading-relaxed max-w-lg">
                 Start, switch, or advance your career with thousands of courses from world-class instructors.
               </p>
               <div className="flex flex-wrap gap-3">
@@ -63,7 +148,7 @@ export function Home() {
               <div className="absolute w-72 h-72 bg-purple-400/20 rounded-full blur-3xl" />
               <div className="absolute w-56 h-56 bg-indigo-400/20 rounded-full blur-3xl translate-x-16 translate-y-10" />
               <div className="relative bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl w-full max-w-sm">
-                <p className="text-xs font-semibold uppercase tracking-widest text-purple-200 mb-5">Platform at a glance</p>
+                <p className="text-sm font-semibold uppercase tracking-widest text-purple-200 mb-5">Platform at a glance</p>
                 <div className="grid grid-cols-2 gap-5 mb-6">
                   {[
                     { Icon: GraduationCap, value: '65M+',  label: 'Students' },
@@ -77,14 +162,14 @@ export function Home() {
                       </div>
                       <div>
                         <div className="text-lg font-bold leading-tight">{value}</div>
-                        <div className="text-xs text-purple-300">{label}</div>
+                        <div className="text-sm text-purple-300">{label}</div>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="border-t border-white/15 pt-5 space-y-2.5">
                   {['Learn at your own pace', 'Certificate on completion', 'Expert instructors'].map(text => (
-                    <div key={text} className="flex items-center gap-2.5 text-sm text-purple-100">
+                    <div key={text} className="flex items-center gap-2.5 text-base text-purple-100">
                       <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
                       {text}
                     </div>
@@ -101,8 +186,8 @@ export function Home() {
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <p className="text-sm font-semibold text-purple-600 uppercase tracking-wider mb-1">Handpicked for you</p>
-              <h2 className="text-3xl font-bold">Featured Courses</h2>
+              <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">Handpicked for you</p>
+              <h2 className="text-4xl font-bold">Featured Courses</h2>
             </div>
             <Link to="/courses">
               <Button variant="outline" className="gap-2 text-sm">
@@ -122,22 +207,22 @@ export function Home() {
       <section className="py-20 bg-gray-50/70">
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="text-center mb-10">
-            <p className="text-sm font-semibold text-purple-600 uppercase tracking-wider mb-1">What do you want to learn?</p>
-            <h2 className="text-3xl font-bold">Browse Top Categories</h2>
+              <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">What do you want to learn?</p>
+              <h2 className="text-4xl font-bold">Browse Top Categories</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
-            {categories.map(category => {
-              const colors = categoryColors[category.id] ?? { bg: 'bg-gray-50', hover: 'hover:bg-gray-100 hover:border-gray-200', iconBg: 'bg-gray-100', text: 'text-gray-700' };
+            {homeCategories.map(category => {
+              const colors = categoryColors[category.colorKey] ?? categoryColors.default;
               return (
                 <Link
                   key={category.id}
-                  to={`/courses?category=${category.id}`}
+                  to={`/courses?category=${encodeURIComponent(category.id)}`}
                   className={`${colors.bg} ${colors.hover} border border-transparent rounded-xl p-4 text-center group transition-all duration-200 hover:shadow-md hover:-translate-y-0.5`}
                 >
-                  <div className={`${colors.iconBg} w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 text-2xl`}>
-                    {category.icon}
+                  <div className={`${colors.iconBg} w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${colors.text}`}>
+                    <CategoryIcon iconKey={category.iconKey} className="w-6 h-6" />
                   </div>
-                  <h3 className={`text-xs font-semibold ${colors.text} leading-tight`}>
+                  <h3 className={`text-sm font-semibold ${colors.text} leading-tight`}>
                     {category.name}
                   </h3>
                 </Link>
@@ -152,8 +237,8 @@ export function Home() {
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <p className="text-sm font-semibold text-purple-600 uppercase tracking-wider mb-1">Trending now</p>
-              <h2 className="text-3xl font-bold">Popular Courses</h2>
+              <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">Trending now</p>
+              <h2 className="text-4xl font-bold">Popular Courses</h2>
             </div>
             <Link to="/courses">
               <Button variant="outline" className="gap-2 text-sm">
@@ -176,9 +261,9 @@ export function Home() {
         <div className="max-w-[1400px] mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <p className="text-sm font-semibold text-purple-300 uppercase tracking-wider mb-3">Share your expertise</p>
-              <h2 className="text-4xl font-bold mb-5 leading-tight">Become an Instructor</h2>
-              <p className="text-lg text-purple-100 mb-8 leading-relaxed">
+              <p className="text-base font-semibold text-purple-300 uppercase tracking-wider mb-3">Share your expertise</p>
+              <h2 className="text-5xl font-bold mb-5 leading-tight">Become an Instructor</h2>
+              <p className="text-xl text-purple-100 mb-8 leading-relaxed">
                 Share your knowledge with millions of students worldwide. Create an online video course, reach students across the globe, and earn money.
               </p>
               <Button
@@ -204,8 +289,8 @@ export function Home() {
                   <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center mb-3">
                     <Icon className="w-4 h-4" />
                   </div>
-                  <h3 className="font-semibold text-sm mb-1">{title}</h3>
-                  <p className="text-xs text-purple-200 leading-relaxed">{desc}</p>
+                  <h3 className="font-semibold text-base mb-1">{title}</h3>
+                  <p className="text-sm text-purple-200 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </div>
@@ -216,7 +301,7 @@ export function Home() {
       {/* ── Trusted Companies ── */}
       <section className="py-16 border-t overflow-hidden bg-gray-50/50">
         <div className="max-w-[1400px] mx-auto px-6">
-          <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-widest mb-10">
+          <p className="text-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-10">
             Trusted by 15,000+ companies and millions of learners worldwide
           </p>
           <div className="relative">
