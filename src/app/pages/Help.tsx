@@ -25,11 +25,7 @@ const faqSections: FAQSection[] = [
       },
       {
         question: 'Do I need to create an account to browse courses?',
-        answer: 'No! You can browse and preview all courses without an account. However, you need to create a free account (or use our Demo mode) to enroll in courses, track your progress, and access course content.',
-      },
-      {
-        question: 'How do I try the platform without signing up?',
-        answer: 'Click the "Try Demo" button in the top navigation bar (or on the home page). Choose "Demo Student" to explore the learning experience with 3 pre-enrolled courses, quizzes, and progress tracking. Choose "Demo Instructor" to explore the instructor dashboard with analytics and course management tools. Demo data is stored locally in your browser and resets on logout.',
+        answer: 'No. You can browse and preview all courses without an account. You only need to create a free account when you want to enroll in courses, track progress, and access course content.',
       },
       {
         question: 'How do I create an account?',
@@ -95,7 +91,7 @@ const faqSections: FAQSection[] = [
       },
       {
         question: 'What payment methods are accepted?',
-        answer: 'Currently we support credit and debit cards. Payment processing is handled securely. In the demo mode, you can simulate a purchase without using real payment information.',
+        answer: 'Currently we support credit and debit cards. Payment processing is handled securely.',
       },
       {
         question: 'Where can I see my purchase history?',
@@ -125,7 +121,7 @@ const faqSections: FAQSection[] = [
       },
       {
         question: 'How do I change my password?',
-        answer: 'Go to your Profile page and click the "Security" tab. Enter your current password and then your new password (minimum 8 characters). Click "Update Password". Note: password changes require a live backend connection and are not available in demo mode.',
+        answer: 'Go to your Profile page and click the "Security" tab. Enter your current password and then your new password (minimum 8 characters). Click "Update Password". Password changes require a live backend connection.',
       },
       {
         question: 'How do I log out?',
@@ -162,10 +158,6 @@ const faqSections: FAQSection[] = [
       {
         question: 'What can I do in the Instructor Dashboard?',
         answer: 'The Instructor Dashboard gives you an overview of your courses, total students, revenue, and monthly enrollment trends with interactive charts. You can view your course list with individual performance stats and create new courses.',
-      },
-      {
-        question: 'How do I try the instructor experience without an account?',
-        answer: 'Click "Try Demo" in the header and select "Demo Instructor". You\'ll be instantly logged in as a demo instructor with sample data, analytics, and a course management interface — no account required.',
       },
     ],
   },
@@ -260,26 +252,6 @@ export default function Help() {
         </div>
       )}
 
-      {/* Demo Callout */}
-      {!searchQuery && (
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 mb-14 text-white text-center">
-          <h2 className="text-xl font-bold mb-2">Want to explore without signing up?</h2>
-          <p className="text-purple-100 mb-4 text-sm">Use our demo mode to try the full platform — no account needed.</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/?demo=student">
-              <Button variant="secondary" size="sm" className="gap-2">
-                🎓 Try Demo Student
-              </Button>
-            </Link>
-            <Link to="/?demo=instructor">
-              <Button variant="outline" size="sm" className="gap-2 border-white text-white hover:bg-white/10">
-                👨‍🏫 Try Demo Instructor
-              </Button>
-            </Link>
-          </div>
-        </div>
-      )}
-
       {/* FAQ Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Section nav */}
@@ -331,7 +303,7 @@ export default function Help() {
       <div className="mt-12 text-center p-8 bg-gray-50 rounded-2xl border border-gray-100">
         <h3 className="font-bold text-lg mb-2">Still have questions?</h3>
         <p className="text-gray-600 text-sm mb-4">
-          Can't find what you're looking for? Browse all courses or try the demo to explore the platform yourself.
+          Can't find what you're looking for? Browse all courses or create an account to start learning.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link to="/courses">
