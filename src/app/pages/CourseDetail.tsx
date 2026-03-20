@@ -79,7 +79,7 @@ export function CourseDetail() {
     }
 
     if (isEnrolled) {
-      toast.info("Siz bu kursga allaqachon enroll bo'lgansiz.");
+      toast.info('You are already enrolled in this course.');
       return;
     }
 
@@ -91,12 +91,12 @@ export function CourseDetail() {
     const normalizedCode = securityCode.replace(/\D/g, '');
 
     if (normalizedCard.length < 12) {
-      toast.error('Credit numberni to‘g‘ri kiriting.');
+      toast.error('Enter a valid credit card number.');
       return;
     }
 
     if (normalizedCode.length !== 3) {
-      toast.error('3 xonali xavfsizlik kodini kiriting.');
+      toast.error('Enter a valid 3-digit security code.');
       return;
     }
 
@@ -106,7 +106,7 @@ export function CourseDetail() {
       setIsBuyNowOpen(false);
       setCreditNumber('');
       setSecurityCode('');
-      toast.success("Enrolle bo'lindi");
+      toast.success('Enrollment successful.');
     } finally {
       setIsBuyingNow(false);
     }
@@ -262,7 +262,7 @@ export function CourseDetail() {
           <DialogHeader>
             <DialogTitle>Buy Now</DialogTitle>
             <DialogDescription>
-              Enrollment uchun credit number va 3 xonali xavfsizlik kodini kiriting.
+              Enter your credit card number and 3-digit security code to complete enrollment.
             </DialogDescription>
           </DialogHeader>
 
@@ -375,7 +375,7 @@ export function CourseDetail() {
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
                     className="w-full border border-purple-100 bg-white rounded-xl p-3 text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200"
-                    placeholder="Kurs bo'yicha fikringizni yozing..."
+                    placeholder="Write your thoughts about this course..."
                   />
                   <Button
                     size="sm"
@@ -395,7 +395,7 @@ export function CourseDetail() {
             {!isAuthenticated || !user?.enrolledCourseIds?.includes(course.id) ? (
               <Card className="mb-7 border-dashed border-purple-200 bg-white/90">
                 <CardContent className="p-5 text-sm text-gray-600">
-                  Faqat enroll bo'lgan foydalanuvchilar comment qoldira oladi.
+                  Only enrolled users can leave a comment.
                 </CardContent>
               </Card>
             ) : null}
@@ -419,8 +419,8 @@ export function CourseDetail() {
                           ))}
                         </div>
                         <p className="text-sm leading-relaxed text-gray-700">
-                          Juda foydali kurs. Tushuntirishlar oddiy, amaliy misollar ko'p va o'qish
-                          jarayoni qulay tashkil qilingan. Tavsiya qilaman.
+                          Very useful course. The explanations are clear, the practical examples are strong,
+                          and the learning flow is easy to follow. Recommended.
                         </p>
                       </div>
                     </div>

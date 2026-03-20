@@ -298,7 +298,7 @@ export default function Learn() {
           completed_lectures: nextCompletedLectures,
         },
       }).catch(() => {
-        toast.error('Progress serverga saqlanmadi, local saqlandi.');
+        toast.error('Progress could not be saved to the server. Your local progress was kept.');
       });
 
       toast.success('Lesson completed!');
@@ -387,7 +387,7 @@ export default function Learn() {
                     <p className="text-gray-400">
                       {sections[currentSection]?.section} — Lecture {currentLecture + 1}
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">Video mavjud emas</p>
+                    <p className="text-sm text-gray-500 mt-1">No video available</p>
                   </div>
                 )}
               </div>
@@ -414,7 +414,7 @@ export default function Learn() {
                           <span className="text-xs uppercase tracking-wider">Additional Task</span>
                         </div>
                         <p className="text-sm text-slate-100 leading-relaxed break-words min-h-12">
-                          {currentLesson?.additional_task?.trim() || "Bu dars uchun qo'shimcha task berilmagan."}
+                          {currentLesson?.additional_task?.trim() || 'No additional task provided for this lesson.'}
                         </p>
                       </div>
                     </div>
@@ -423,7 +423,7 @@ export default function Learn() {
                       <div>
                         <p className="text-xs uppercase tracking-wider text-slate-400">Presentation</p>
                         <p className="text-sm text-slate-200 mt-1">
-                          {currentLesson?.presentation ? 'Presentation fayl mavjud' : 'Presentation mavjud emas'}
+                          {currentLesson?.presentation ? 'Presentation file available' : 'No presentation available'}
                         </p>
                       </div>
                       {currentLesson?.presentation ? (
@@ -458,7 +458,7 @@ export default function Learn() {
               {!sectionQuiz ? (
                 <div className="text-center py-16 text-gray-400">
                   <p className="text-4xl mb-4">📝</p>
-                  <p className="text-lg">Bu dars uchun quiz mavjud emas.</p>
+                  <p className="text-lg">No quiz is available for this lesson.</p>
                 </div>
               ) : quizState === 'idle' ? (
                 <QuizIdle quiz={sectionQuiz} storageKey={quizStorageKey} onStart={() => { setQuizState('taking'); setSelectedAnswers({}); setQuizSubmitted(false); }} />
@@ -496,7 +496,7 @@ export default function Learn() {
                         console.log('Quiz submit response:', quizResponse);
                       } catch (error) {
                         console.error('Quiz submit failed:', error);
-                        toast.error('Quiz natijasini serverga yuborib bo‘lmadi.');
+                        toast.error('Quiz results could not be submitted to the server.');
                       }
                     }
 
