@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -12,23 +13,37 @@ interface SignupForm {
   email: string;
   password: string;
   confirmPassword: string;
+  code: string;
   role: 'student' | 'instructor';
 }
 
 export default function Signup() {
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, verifyRegistration } = useAuth();
   const navigate = useNavigate();
+  const [pendingSignup, setPendingSignup] = useState<Pick<SignupForm, 'name' | 'email' | 'role'> | null>(null);
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<SignupForm>({
-    defaultValues: { role: 'student' }
+    defaultValues: { role: 'student', code: '' }
   });
 
   const onSubmit = async (data: SignupForm) => {
     try {
       await registerUser(data.name, data.email, data.password, data.role);
-      toast.success('Account created! Welcome to Digital Academy.');
+      setPendingSignup({ name: data.name, email: data.email, role: data.role });
+      toast.success('Verification code sent. Check your email.');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Registration failed. Please try again.');
+    }
+  };
+
+  const onVerify = async (data: SignupForm) => {
+    if (!pendingSignup) return;
+
+    try {
+      await verifyRegistration(pendingSignup.name, pendingSignup.email, data.code, pendingSignup.role);
+      toast.success('Account verified! Welcome to Digital Academy.');
       navigate('/dashboard');
-    } catch {
-      toast.error('Registration failed. Please try again.');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Verification failed. Please try again.');
     }
   };
 
@@ -37,10 +52,13 @@ export default function Signup() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">D</div>
-          <CardTitle className="text-2xl">Create your account</CardTitle>
-          <CardDescription>Join millions of learners worldwide</CardDescription>
+          <CardTitle className="text-2xl">{pendingSignup ? 'Verify your email' : 'Create your account'}</CardTitle>
+          <CardDescription>
+            {pendingSignup ? `Enter the verification code sent to ${pendingSignup.email}` : 'Join millions of learners worldwide'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {!pendingSignup ? (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -83,6 +101,22 @@ export default function Signup() {
               {isSubmitting ? 'Creating account...' : 'Create Account'}
             </Button>
           </form>
+          ) : (
+          <form onSubmit={handleSubmit(onVerify)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="code">Verification Code</Label>
+              <Input
+                id="code"
+                placeholder="Enter the code from your email"
+                {...register('code', { required: 'Verification code is required' })}
+              />
+              {errors.code && <p className="text-sm text-red-500">{errors.code.message}</p>}
+            </div>
+            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
+              {isSubmitting ? 'Verifying...' : 'Verify Account'}
+            </Button>
+          </form>
+          )}
           <p className="text-center text-sm text-gray-600 mt-4">
             Already have an account?{' '}
             <Link to="/login" className="text-purple-600 hover:underline font-medium">Sign in</Link>

@@ -8,7 +8,7 @@ import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 
 interface LoginForm {
-  email: string;
+  identifier: string;
   password: string;
 }
 
@@ -20,7 +20,7 @@ export default function Login() {
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      const role = await login(data.email, data.password);
+      const role = await login(data.identifier, data.password);
       toast.success('Welcome back!');
       navigate(role === 'instructor' ? '/instructor' : '/profile', { replace: true });
     } catch (err: any) {
@@ -39,14 +39,14 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="identifier">Email or username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                {...register('email', { required: 'Email is required' })}
+                id="identifier"
+                type="text"
+                placeholder="you@example.com or username"
+                {...register('identifier', { required: 'Email or username is required' })}
               />
-              {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+              {errors.identifier && <p className="text-sm text-red-500">{errors.identifier.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>

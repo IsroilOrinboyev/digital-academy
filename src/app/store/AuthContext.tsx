@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, Notification, Transaction } from '@/app/types';
-import { authApi, setTokens, clearTokens } from '@/app/services/api';
+import { authApi, courseApi, orderApi, resolveCourseId, setTokens, clearTokens, getAccessToken } from '@/app/services/api';
 
 interface AuthContextType extends AuthState {
   apiAvailable: boolean;
   login: (email: string, password: string) => Promise<'student' | 'instructor'>;
-  register: (name: string, email: string, password: string, role: 'student' | 'instructor') => Promise<void>;
+  register: (name: string, email: string, password: string, role: 'student' | 'instructor') => Promise<'verification_sent'>;
+  verifyRegistration: (name: string, email: string, code: string, role: 'student' | 'instructor') => Promise<'student' | 'instructor'>;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
-  enrollInCourse: (courseId: string, courseTitle: string, amount: number) => void;
+  enrollInCourse: (courseId: string, courseTitle: string, amount: number) => Promise<void>;
   notifications: Notification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -35,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>(() => load(STORAGE_KEY, { user: null, isAuthenticated: false }));
   const [notifications, setNotifications] = useState<Notification[]>(() => load(NOTIF_KEY, []));
   const [transactions, setTransactions] = useState<Transaction[]>(() => load(TX_KEY, []));
-  const [apiAvailable, setApiAvailable] = useState(false);
+  const [apiAvailable, setApiAvailable] = useState(() => Boolean(getAccessToken()));
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
   useEffect(() => { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications)); }, [notifications]);
@@ -48,6 +49,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       { id: 'n3', message: 'Complete your profile to get personalized recommendations', read: true, createdAt: new Date(Date.now() - 172800000).toISOString(), link: '/profile' },
     ]);
   };
+
+  const syncStudentData = async () => {
+    const [myCoursesRes, ordersRes] = await Promise.all([
+      courseApi.myEnrolledCourses(),
+      orderApi.list().catch(() => ({ data: [] as Array<{ course_title: string; total_amount: string | null }> })),
+    ]);
+
+    const enrolledCourseIds = (myCoursesRes.data ?? []).map(item => resolveCourseId(item.course)).filter(Boolean);
+
+    setState(prev => {
+      if (!prev.user || prev.user.role !== 'student') return prev;
+      return {
+        ...prev,
+        user: {
+          ...prev.user,
+          enrolledCourseIds,
+        },
+      };
+    });
+
+    if (Array.isArray(ordersRes.data) && ordersRes.data.length > 0) {
+      setTransactions(
+        ordersRes.data.map((item, idx) => ({
+          id: `order-${idx}-${item.course_title}`,
+          date: new Date().toISOString(),
+          courseTitle: item.course_title,
+          amount: Number(item.total_amount ?? 0),
+          status: 'completed',
+        }))
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!state.isAuthenticated || !state.user || state.user.role !== 'student' || !getAccessToken()) return;
+
+    setApiAvailable(true);
+    syncStudentData().catch(() => {
+      // Keep persisted local auth state if student sync fails.
+    });
+  }, [state.isAuthenticated, state.user?.id, state.user?.role]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -73,6 +115,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState({ user: u, isAuthenticated: true });
       seedNotifications(u.name, role === 'instructor' ? '/instructor' : '/profile');
       setApiAvailable(true);
+      if (role === 'student') {
+        await syncStudentData();
+      }
       return role;
     } catch (err: any) {
       setApiAvailable(false);
@@ -82,19 +127,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (name: string, email: string, password: string, role: 'student' | 'instructor') => {
     try {
-      const data = await authApi.register({ name, email, password, role });
-      setTokens(data.access, data.refresh);
-      const u: User = { id: data.user.id ?? String(Date.now()), name, email, role, enrolledCourseIds: [], createdAt: new Date().toISOString() };
-      setState({ user: u, isAuthenticated: true });
-      seedNotifications(name, role === 'instructor' ? '/instructor' : '/profile');
+      await authApi.register({ name, email, password, role });
       setApiAvailable(true);
-    } catch {
-      // Offline fallback
-      const user: User = { id: crypto.randomUUID(), name, email, role, enrolledCourseIds: [], createdAt: new Date().toISOString() };
-      const users: User[] = load('da_users', []);
-      localStorage.setItem('da_users', JSON.stringify([...users, user]));
-      setState({ user, isAuthenticated: true });
-      seedNotifications(name, role === 'instructor' ? '/instructor' : '/profile');
+      return 'verification_sent';
+    } catch (err: any) {
+      setApiAvailable(false);
+      throw new Error(err?.message ?? 'Registration failed');
+    }
+  };
+
+  const verifyRegistration = async (name: string, email: string, code: string, role: 'student' | 'instructor') => {
+    try {
+      const data = await authApi.verifyCode(email, code);
+      if (!data?.tokens?.access || !data?.tokens?.refresh || !data?.user?.id) {
+        throw new Error('Verification response is incomplete.');
+      }
+
+      setTokens(data.tokens.access, data.tokens.refresh);
+      const u: User = {
+        id: data.user.id,
+        name: data.user.username ?? name,
+        email: data.user.email,
+        role,
+        enrolledCourseIds: [],
+        createdAt: new Date().toISOString(),
+      };
+      setState({ user: u, isAuthenticated: true });
+      seedNotifications(u.name, role === 'instructor' ? '/instructor' : '/profile');
+      setApiAvailable(true);
+      if (role === 'student') {
+        await syncStudentData();
+      }
+      return role;
+    } catch (err: any) {
+      setApiAvailable(false);
+      throw new Error(err?.message ?? 'Verification failed');
     }
   };
 
@@ -118,34 +185,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (idx >= 0) { users[idx] = updated; localStorage.setItem('da_users', JSON.stringify(users)); }
   };
 
-  const enrollInCourse = (courseId: string, courseTitle: string, amount: number) => {
+  const enrollInCourse = async (courseId: string, courseTitle: string, amount: number) => {
     if (!state.user) return;
-    const updatedEnrolled = [...(state.user.enrolledCourseIds || []), courseId];
+    if (apiAvailable) {
+      try {
+        await courseApi.enroll(courseId);
+      } catch {
+        // Fall back to local state below if enroll API is unavailable.
+      }
+    }
+
+    const updatedEnrolled = Array.from(new Set([...(state.user.enrolledCourseIds || []), courseId]));
     const updated = { ...state.user, enrolledCourseIds: updatedEnrolled };
     setState(prev => ({ ...prev, user: updated }));
-    if (apiAvailable) courseApi_enroll(courseId);
     const users: User[] = load('da_users', []);
     const idx = users.findIndex(u => u.id === state.user!.id);
     if (idx >= 0) { users[idx] = updated; localStorage.setItem('da_users', JSON.stringify(users)); }
     const tx: Transaction = { id: crypto.randomUUID(), date: new Date().toISOString(), courseTitle, amount, status: 'completed' };
     setTransactions(prev => [tx, ...prev]);
     setNotifications(prev => [{ id: crypto.randomUUID(), message: `You've enrolled in "${courseTitle}"!`, read: false, createdAt: new Date().toISOString(), link: '/dashboard' }, ...prev]);
+
+    if (apiAvailable) {
+      syncStudentData().catch(() => {
+        // Keep optimistic transaction and enrollment state if sync fails.
+      });
+    }
   };
 
   const markNotificationRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   const markAllNotificationsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   return (
-    <AuthContext.Provider value={{ ...state, apiAvailable, login, register, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
+    <AuthContext.Provider value={{ ...state, apiAvailable, login, register, verifyRegistration, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-// Import courseApi.enroll lazily to avoid circular
-async function courseApi_enroll(id: string) {
-  const { courseApi } = await import('@/app/services/api');
-  courseApi.enroll(id).catch(() => {});
 }
 
 export function useAuth() {

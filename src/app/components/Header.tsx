@@ -17,15 +17,27 @@ import { courses } from '../data/courses';
 import { useAuth } from '@/app/store/AuthContext';
 import { toast } from 'sonner';
 
+function loadSearchCourses() {
+  try {
+    const raw = localStorage.getItem('da_public_courses_cache');
+    if (!raw) return courses;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? [...parsed, ...courses] : courses;
+  } catch {
+    return courses;
+  }
+}
+
 export function Header() {
   const navigate = useNavigate();
   const { isAuthenticated, user, logout } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const availableCourses = loadSearchCourses();
 
   const searchResults = searchQuery.trim()
-    ? courses
+    ? availableCourses
         .filter(c =>
           c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           c.instructor.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -89,7 +101,7 @@ export function Header() {
                     onMouseDown={() => {
                       setShowSearchDropdown(false);
                       setSearchQuery('');
-                      navigate(`/course/${course.id}`);
+                      navigate(`/course/${course.slug ?? course.id}`);
                     }}
                   >
                     <img src={course.image} alt={course.title} className="w-10 h-8 object-cover rounded flex-shrink-0" />
@@ -235,12 +247,12 @@ export function Header() {
                 <button
                   key={course.id}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left border-b last:border-0"
-                  onMouseDown={() => {
-                    setShowSearchDropdown(false);
-                    setSearchQuery('');
-                    navigate(`/course/${course.id}`);
-                  }}
-                >
+                onMouseDown={() => {
+                  setShowSearchDropdown(false);
+                  setSearchQuery('');
+                  navigate(`/course/${course.slug ?? course.id}`);
+                }}
+              >
                   <img src={course.image} alt={course.title} className="w-10 h-8 object-cover rounded flex-shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium line-clamp-1">{course.title}</p>

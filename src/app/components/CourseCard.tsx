@@ -16,7 +16,7 @@ export function CourseCard({ course }: CourseCardProps) {
     : null;
 
   return (
-    <Link to={`/course/${course.id}`} state={{ course }} className="group block h-full">
+    <Link to={`/course/${course.slug ?? course.id}`} state={{ course }} className="group block h-full">
       <Card className="hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col group-hover:-translate-y-0.5 border-gray-100">
         {/* Thumbnail */}
         <div className="relative aspect-video overflow-hidden bg-gray-100 shrink-0">

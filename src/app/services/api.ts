@@ -4,9 +4,24 @@ const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'https://api.digital-
 const TOKEN_KEY = 'da_access_token';
 const REFRESH_KEY = 'da_refresh_token';
 const CATEGORY_ENDPOINT_PATH = '/api/users/category/';
-const CATEGORY_ENDPOINT_ABSOLUTE = 'https://api.digital-academy.live/api/users/category/';
 const TEACHER_COURSES_ENDPOINT = '/api/teachers/courses/';
-const TEACHER_COURSE_ENDPOINT_LEGACY = '/api/teachers/course/';
+
+type MaybeWrappedResponse<T> = T | { success?: boolean; status?: number; data?: T };
+
+function unwrapApiData<T>(response: MaybeWrappedResponse<T> | null | undefined, fallback: T): T {
+  if (response && typeof response === 'object' && 'data' in response && response.data !== undefined) {
+    return response.data as T;
+  }
+  return (response as T | null | undefined) ?? fallback;
+}
+
+function wrapApiData<T>(response: MaybeWrappedResponse<T> | null | undefined, fallback: T) {
+  return {
+    success: true,
+    status: 200,
+    data: unwrapApiData(response, fallback),
+  };
+}
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -192,7 +207,11 @@ export interface UserPublicCourseItem {
   title: string;
   desc: string;
   base_price: number;
-  discount_price: number;
+  discount_price: number | null;
+  slug?: string;
+  instructor?: string;
+  instructor_name?: string;
+  teacher_name?: string;
 }
 
 export interface UserPublicCourseListResponse {
@@ -209,7 +228,7 @@ export interface UserCoursesQueryParams {
 
 export interface MyCourseListItem {
   id: string;
-  course: string;
+  course: string | { id?: string } | null;
   progress: number;
   status: string;
 }
@@ -315,6 +334,23 @@ export interface UpdateCourseProgressPayload {
   completed_lectures?: string[];
 }
 
+export interface OrderListItem {
+  course_title: string;
+  total_amount: string | null;
+}
+
+export interface OrderListResponse {
+  success: boolean;
+  status: number;
+  data: OrderListItem[];
+}
+
+export function resolveCourseId(course: MyCourseListItem['course']): string {
+  if (typeof course === 'string') return course;
+  if (course && typeof course === 'object' && typeof course.id === 'string') return course.id;
+  return '';
+}
+
 // ── Auth endpoints ─────────────────────────────────────────────────────────
 export interface LoginApiResponse {
   success: boolean;
@@ -335,36 +371,72 @@ export interface LoginApiResponse {
   };
 }
 
+export interface VerifyCodeApiResponse {
+  message: string;
+  user: {
+    id: string;
+    username: string | null;
+    email: string;
+  };
+  tokens: {
+    refresh: string;
+    access: string;
+  };
+}
+
 export const authApi = {
-  login: (email: string, password: string) =>
-    apiRequest<LoginApiResponse>('/api/users/auth/login/', {
-      method: 'POST', body: JSON.stringify({ email, password }),
-    }),
+  login: async (identifier: string, password: string) => {
+    const primaryPayload = identifier.includes('@')
+      ? { email: identifier, password }
+      : { username: identifier, password };
+    const fallbackPayload = identifier.includes('@')
+      ? { username: identifier, password }
+      : { email: identifier, password };
+
+    try {
+      return await apiRequest<LoginApiResponse>('/api/users/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify(primaryPayload),
+      });
+    } catch {
+      return apiRequest<LoginApiResponse>('/api/users/auth/login/', {
+        method: 'POST',
+        body: JSON.stringify(fallbackPayload),
+      });
+    }
+  },
 
   register: (data: { name: string; email: string; password: string; role: string }) =>
-    apiRequest<{ access: string; refresh: string; user: any }>('/api/auth/register/', {
-      method: 'POST', body: JSON.stringify(data),
+    apiRequest<any>('/api/users/auth/register/', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: data.name,
+        email: data.email,
+        password: data.password,
+      }),
     }),
 
-  logout: () =>
-    apiRequest<void>('/api/auth/logout/', {
-      method: 'POST', body: JSON.stringify({ refresh: localStorage.getItem('da_refresh_token') }),
+  verifyCode: (email: string, code: string) =>
+    apiRequest<VerifyCodeApiResponse>('/api/users/auth/verify-code/', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
     }),
 
-  getProfile: () => apiRequest<any>('/api/auth/profile/'),
+  logout: async () => undefined,
 
-  updateProfile: (data: Partial<{ name: string; email: string; bio: string; avatar: string }>) =>
-    apiRequest<any>('/api/auth/profile/', { method: 'PATCH', body: JSON.stringify(data) }),
+  getProfile: async () => null,
+
+  updateProfile: async (data: Partial<{ name: string; email: string; bio: string; avatar: string }>) => data,
 
   changePassword: (data: { old_password: string; new_password: string }) =>
-    apiRequest<void>('/api/auth/password/change/', { method: 'POST', body: JSON.stringify(data) }),
+    apiRequest<void>('/api/users/auth/update-password/', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ── Course endpoints ───────────────────────────────────────────────────────
 export const courseApi = {
   list: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return apiRequest<any[]>(`/api/courses/${qs}`);
+    return apiRequest<any[]>(`/api/users/courses/${qs}`);
   },
 
   create: (data: CreateCoursePayload) => {
@@ -426,11 +498,7 @@ export const courseApi = {
   },
 
   myCourses: async () => {
-    try {
-      return await apiRequest<UserCourseListResponse>(TEACHER_COURSES_ENDPOINT);
-    } catch {
-      return apiRequest<UserCourseListResponse>(TEACHER_COURSE_ENDPOINT_LEGACY);
-    }
+    return apiRequest<UserCourseListResponse>(TEACHER_COURSES_ENDPOINT);
   },
 
   update: (courseId: string, data: UpdateCoursePayload) => {
@@ -446,19 +514,17 @@ export const courseApi = {
     return apiRequest<any>(`${TEACHER_COURSES_ENDPOINT}${courseId}/`, {
       method: 'PATCH',
       body: formData,
-    }).catch(() =>
-      apiRequest<any>(`${TEACHER_COURSE_ENDPOINT_LEGACY}${courseId}/`, {
-        method: 'PATCH',
-        body: formData,
-      })
-    );
+    });
   },
 
-  detail: (id: string) => apiRequest<any>(`/api/courses/${id}/`),
+  detail: (id: string) => apiRequest<any>(`${TEACHER_COURSES_ENDPOINT}${id}/`),
 
-  userCourses: (params?: UserCoursesQueryParams) => {
+  publicDetail: (slugOrId: string) => apiRequest<any>(`/api/users/courses/${slugOrId}/`),
+
+  userCourses: async (params?: UserCoursesQueryParams) => {
     if (!params) {
-      return apiRequest<UserPublicCourseListResponse>('/api/users/courses/');
+      const response = await apiRequest<MaybeWrappedResponse<UserPublicCourseItem[]>>('/api/users/courses/');
+      return wrapApiData(response, [] as UserPublicCourseItem[]);
     }
 
     const query = new URLSearchParams();
@@ -476,115 +542,145 @@ export const courseApi = {
 
     const qs = query.toString();
     const endpoint = qs ? `/api/users/courses/?${qs}` : '/api/users/courses/';
-    return apiRequest<UserPublicCourseListResponse>(endpoint);
+    const response = await apiRequest<MaybeWrappedResponse<UserPublicCourseItem[]>>(endpoint);
+    return wrapApiData(response, [] as UserPublicCourseItem[]);
   },
 
-  myEnrolledCourses: () => apiRequest<MyCourseListResponse>('/api/users/my-courses/'),
+  myEnrolledCourses: async () => {
+    const response = await apiRequest<MaybeWrappedResponse<MyCourseListItem[]>>('/api/users/my-courses/');
+    return wrapApiData(response, [] as MyCourseListItem[]);
+  },
 
-  myEnrolledCourseDetail: (id: string) =>
-    apiRequest<MyCourseDetailResponse>(`/api/users/my-courses/${id}/`),
+  myEnrolledCourseDetail: async (id: string) => {
+    const response = await apiRequest<MaybeWrappedResponse<MyCourseDetailResponse['data']>>(`/api/users/my-courses/${id}/`);
+    return wrapApiData(response, null as MyCourseDetailResponse['data'] | null);
+  },
 
-  submitUserQuiz: async (quizId: string, data: SubmitUserQuizPayload) => {
-    const payload = {
+  submitUserQuiz: (quizId: string, data: SubmitUserQuizPayload) =>
+    apiRequest<SubmitUserQuizResponse>(`/api/users/quiz/${quizId}/submit/`, {
       method: 'POST',
       body: JSON.stringify(data),
-    };
+    }),
 
-    try {
-      return await apiRequest<SubmitUserQuizResponse>(`/api/users/quiz/${quizId}/submit/`, payload);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes('HTTP 404') && !message.includes('HTTP 405')) {
-        throw error;
-      }
-      return apiRequest<SubmitUserQuizResponse>(`/api/users/quiz/${quizId}/`, payload);
-    }
-  },
+  enroll: (id: string) =>
+    apiRequest<void>('/api/users/enrolment/', {
+      method: 'POST',
+      body: JSON.stringify({ course: id }),
+    }),
 
-  enroll: async (id: string) => {
-    try {
-      return await apiRequest<void>('/api/users/enrolment/', {
-        method: 'POST',
-        body: JSON.stringify({ course: id }),
-      });
-    } catch {
-      return apiRequest<void>(`/api/courses/${id}/enroll/`, { method: 'POST' });
-    }
-  },
-
-  reviews: (id: string) => apiRequest<any[]>(`/api/courses/${id}/reviews/`),
+  reviews: (id: string) => apiRequest<any[]>(`/api/users/comments/?course=${id}`),
 
   addReview: (id: string, data: { rating: number; comment: string }) =>
-    apiRequest<any>(`/api/courses/${id}/reviews/`, { method: 'POST', body: JSON.stringify(data) }),
+    apiRequest<any>('/api/users/comments/', {
+      method: 'POST',
+      body: JSON.stringify({ course: id, comment: data.comment, likes: data.rating }),
+    }),
 
   getProgress: async (params: { enrollmentId?: string; courseId?: string }) => {
     const { enrollmentId, courseId } = params;
 
     if (enrollmentId) {
-      try {
-        return await apiRequest<CourseProgressApiResponse>(`/api/users/my-courses/${enrollmentId}/progress/`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes('HTTP 404') && !message.includes('HTTP 405')) {
-          throw error;
-        }
-      }
+      const detailResponse = await apiRequest<MaybeWrappedResponse<MyCourseDetailResponse['data']>>(`/api/users/my-courses/${enrollmentId}/`);
+      const detail = unwrapApiData(detailResponse, null as MyCourseDetailResponse['data'] | null);
+
+      return {
+        success: true,
+        status: 200,
+        data: {
+          progress: Number(detail?.progress ?? 0),
+          status: detail?.status,
+          completed_lectures: [],
+        },
+      } as CourseProgressApiResponse;
     }
 
     if (!courseId) {
       throw new Error('Progress endpoint requires enrollmentId or courseId');
     }
 
-    return apiRequest<CourseProgressApiResponse>(`/api/courses/${courseId}/progress/`);
+    const myCoursesResponse = await apiRequest<MaybeWrappedResponse<MyCourseListItem[]>>('/api/users/my-courses/');
+    const myCourses = unwrapApiData(myCoursesResponse, [] as MyCourseListItem[]);
+    const matched = myCourses.find((item) => resolveCourseId(item.course) === courseId);
+
+    if (!matched) {
+      return {
+        success: true,
+        status: 200,
+        data: {
+          progress: 0,
+          status: undefined,
+          completed_lectures: [],
+        },
+      } as CourseProgressApiResponse;
+    }
+
+    const detailResponse = await apiRequest<MaybeWrappedResponse<MyCourseDetailResponse['data']>>(`/api/users/my-courses/${matched.id}/`);
+    const detail = unwrapApiData(detailResponse, null as MyCourseDetailResponse['data'] | null);
+
+    return {
+      success: true,
+      status: 200,
+      data: {
+        progress: Number(detail?.progress ?? 0),
+        status: detail?.status,
+        completed_lectures: [],
+      },
+    } as CourseProgressApiResponse;
   },
 
   updateProgress: async (params: { enrollmentId?: string; courseId?: string; data: UpdateCourseProgressPayload }) => {
     const { enrollmentId, courseId, data } = params;
-    const payload = { method: 'POST', body: JSON.stringify(data) };
 
-    if (enrollmentId) {
-      try {
-        return await apiRequest<CourseProgressApiResponse>(`/api/users/my-courses/${enrollmentId}/progress/`, payload);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes('HTTP 404') && !message.includes('HTTP 405')) {
-          throw error;
-        }
-      }
-    }
-
-    if (!courseId) {
+    if (!enrollmentId && !courseId) {
       throw new Error('Progress endpoint requires enrollmentId or courseId');
     }
 
-    return apiRequest<CourseProgressApiResponse>(`/api/courses/${courseId}/progress/`, payload);
+    // Backend currently exposes read-only progress via my-courses detail.
+    // Keep local progress state in sync and return a normalized response.
+    return {
+      success: true,
+      status: 200,
+      data,
+    } as CourseProgressApiResponse;
   },
 
-  getQuiz: (courseId: string, sectionIdx: number) =>
-    apiRequest<any>(`/api/courses/${courseId}/quizzes/${sectionIdx}/`),
+  getQuiz: (_courseId: string, quizId: number) =>
+    apiRequest<any>(`/api/users/quiz/${quizId}/`),
 
-  submitQuiz: (courseId: string, sectionIdx: number, answers: Record<number, number>) =>
-    apiRequest<{ score: number; passed: boolean; correct: number; total: number }>(
-      `/api/courses/${courseId}/quizzes/${sectionIdx}/submit/`,
-      { method: 'POST', body: JSON.stringify({ answers }) }
-    ),
+  submitQuiz: async (_courseId: string, quizId: number, answers: Record<number, number>) => {
+    const payload = {
+      answers: Object.entries(answers).map(([question, variant]) => ({
+        question: String(question),
+        variant: String(variant),
+      })),
+    };
+
+    const result = await apiRequest<{
+      correct_answers?: number;
+      total_questions?: number;
+      status?: string;
+    }>(`/api/users/quiz/${quizId}/submit/`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const correct = Number(result?.correct_answers ?? 0);
+    const total = Number(result?.total_questions ?? 0);
+    const passed = String(result?.status ?? '').toUpperCase() === 'PASSED';
+
+    return {
+      score: correct,
+      passed,
+      correct,
+      total,
+    };
+  },
 };
 
 export const categoryApi = {
   list: async () => {
-    try {
-      return await apiRequest<CategoryListResponse>(CATEGORY_ENDPOINT_PATH);
-    } catch {
-      const res = await fetch(CATEGORY_ENDPOINT_ABSOLUTE, {
-        headers: { Accept: 'application/json' },
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      return res.json() as Promise<CategoryListResponse>;
-    }
+    const response = await apiRequest<MaybeWrappedResponse<CategoryItem[]>>(CATEGORY_ENDPOINT_PATH);
+    return wrapApiData(response, [] as CategoryItem[]);
   },
 };
 
@@ -594,4 +690,11 @@ export const quizApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+};
+
+export const orderApi = {
+  list: async () => {
+    const response = await apiRequest<MaybeWrappedResponse<OrderListItem[]>>('/api/users/enrolment/');
+    return wrapApiData(response, [] as OrderListItem[]);
+  },
 };

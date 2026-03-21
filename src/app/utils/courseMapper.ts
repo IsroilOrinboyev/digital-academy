@@ -1,14 +1,19 @@
 import { Course } from '@/app/data/courses';
 import { UserPublicCourseItem } from '@/app/services/api';
 
+function resolveInstructor(item: UserPublicCourseItem): string {
+  return item.instructor_name || item.teacher_name || item.instructor || 'Digital Academy';
+}
+
 export function mapApiCourseToCourse(item: UserPublicCourseItem): Course {
   return {
     id: item.id,
+    slug: item.slug,
     title: item.title,
-    instructor: 'Digital Academy',
+    instructor: resolveInstructor(item),
     rating: 4.7,
     reviewCount: 0,
-    price: item.discount_price,
+    price: item.discount_price ?? item.base_price,
     originalPrice: item.base_price,
     image: item.cover_img || 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1080&q=80',
     category: 'development',

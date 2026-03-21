@@ -7,9 +7,10 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { User, Lock, Bell, Eye, EyeOff, Camera, BookOpen, Receipt, Award, Play } from 'lucide-react';
-import { authApi, courseApi } from '@/app/services/api';
+import { authApi, courseApi, resolveCourseId } from '@/app/services/api';
 import { courses, Course } from '@/app/data/courses';
 import { Link, useSearchParams } from 'react-router';
+import { mapApiCourseToCourse } from '@/app/utils/courseMapper';
 
 type Tab = 'profile' | 'courses' | 'payments' | 'credentials' | 'security' | 'notifications';
 
@@ -69,31 +70,25 @@ export default function Profile() {
           courseApi.userCourses().catch(() => null),
         ]);
 
-        const publicCoursesFromApi = publicRes?.data?.map((item) => ({
-          id: item.id,
-          title: item.title,
-          instructor: 'Digital Academy',
-          image:
-            item.cover_img ||
-            'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1080&q=80',
-        })) ?? [];
+        const publicCoursesFromApi = publicRes?.data?.map(mapApiCourseToCourse) ?? [];
 
         const cached = loadCachedPublicCourses();
         const allSources = [...courses, ...cached];
 
         const list: ProfileEnrolledCourse[] = (myCoursesRes.data ?? []).map((item) => {
-          const fromPublicApi = publicCoursesFromApi.find((c) => c.id === item.course);
-          const fromLocal = allSources.find((c) => c.id === item.course);
+          const courseId = resolveCourseId(item.course);
+          const fromPublicApi = publicCoursesFromApi.find((c) => c.id === courseId || c.slug === courseId);
+          const fromLocal = allSources.find((c) => c.id === courseId || c.slug === courseId);
 
           return {
             enrollmentId: item.id,
-            courseId: item.course,
+            courseId,
             progress: Math.max(0, Math.min(100, Number(item.progress) || 0)),
             status: item.status,
             title: fromPublicApi?.title ?? fromLocal?.title ?? 'Untitled course',
             instructor: fromPublicApi?.instructor ?? fromLocal?.instructor ?? 'Digital Academy',
             image: fromPublicApi?.image ?? fromLocal?.image ?? 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1080&q=80',
-            totalLectures: fromLocal?.curriculum?.reduce((s, sec) => s + sec.lectures, 0) ?? 0,
+            totalLectures: (fromPublicApi ?? fromLocal)?.curriculum?.reduce((s, sec) => s + sec.lectures, 0) ?? 0,
           };
         });
 

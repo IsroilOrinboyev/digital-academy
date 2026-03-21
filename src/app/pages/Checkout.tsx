@@ -28,7 +28,7 @@ export default function Checkout() {
 
   const onPayment = async (_data: PaymentForm) => {
     await new Promise(r => setTimeout(r, 1500));
-    items.forEach(item => enrollInCourse(item.courseId, item.title, item.price));
+    await Promise.all(items.map(item => enrollInCourse(item.courseId, item.title, item.price)));
     clearCart();
     setStep('confirmation');
     toast.success('Payment successful!');

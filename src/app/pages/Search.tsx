@@ -3,20 +3,32 @@ import { useSearchParams } from 'react-router';
 import { courses } from '@/app/data/courses';
 import { CourseCard } from '@/app/components/CourseCard';
 
+function loadSearchCourses() {
+  try {
+    const raw = localStorage.getItem('da_public_courses_cache');
+    if (!raw) return courses;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? [...parsed, ...courses] : courses;
+  } catch {
+    return courses;
+  }
+}
+
 export default function Search() {
   const [searchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
+  const availableCourses = loadSearchCourses();
 
   const results = useMemo(() => {
     if (!q.trim()) return [];
     const lower = q.toLowerCase();
-    return courses.filter(c =>
+    return availableCourses.filter(c =>
       c.title.toLowerCase().includes(lower) ||
       c.description.toLowerCase().includes(lower) ||
       c.instructor.toLowerCase().includes(lower) ||
       c.category.toLowerCase().includes(lower)
     );
-  }, [q]);
+  }, [availableCourses, q]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

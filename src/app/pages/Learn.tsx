@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router';
 import { courses } from '@/app/data/courses';
 import { courseQuizzes, type SectionQuiz } from '@/app/data/quizzes';
 import { Button } from '@/app/components/ui/button';
-import { courseApi, type MyCourseDetailResponse } from '@/app/services/api';
+import { courseApi, resolveCourseId, type MyCourseDetailResponse } from '@/app/services/api';
 import { ArrowLeft, CheckCircle, PlayCircle, Trophy, FileText, ClipboardList, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -169,10 +169,21 @@ export default function Learn() {
   const { courseId: learningId } = useParams<{ courseId: string }>();
   const [myCourseDetail, setMyCourseDetail] = useState<MyCourseDetailResponse['data'] | null>(null);
   const [loadingMyCourse, setLoadingMyCourse] = useState(true);
-  const enrollmentId = myCourseDetail?.id ?? learningId;
-  const fallbackCourse = courses.find(c => c.id === learningId);
+  const [resolvedEnrollmentId, setResolvedEnrollmentId] = useState<string | null>(null);
+  const cachedCourses = (() => {
+    try {
+      const raw = localStorage.getItem('da_public_courses_cache');
+      if (!raw) return [] as typeof courses;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [] as typeof courses;
+    }
+  })();
+  const enrollmentId = myCourseDetail?.id ?? resolvedEnrollmentId ?? learningId;
+  const fallbackCourse = cachedCourses.find(c => c.id === learningId || c.slug === learningId) ?? courses.find(c => c.id === learningId);
   const resolvedCourseId = myCourseDetail?.course?.id ?? fallbackCourse?.id ?? learningId;
-  const resolvedCourse = courses.find(c => c.id === resolvedCourseId);
+  const resolvedCourse = cachedCourses.find(c => c.id === resolvedCourseId || c.slug === resolvedCourseId) ?? courses.find(c => c.id === resolvedCourseId);
   const sections = myCourseDetail
     ? myCourseDetail.course.units.map((unit) => ({
         section: unit.title,
@@ -202,7 +213,22 @@ export default function Learn() {
 
       try {
         setLoadingMyCourse(true);
-        const res = await courseApi.myEnrolledCourseDetail(learningId);
+        let res: Awaited<ReturnType<typeof courseApi.myEnrolledCourseDetail>> | null = null;
+
+        try {
+          res = await courseApi.myEnrolledCourseDetail(learningId);
+        } catch {
+          const myCourses = await courseApi.myEnrolledCourses();
+          const matchedCourse = (myCourses.data ?? []).find((item) =>
+            item.id === learningId || resolveCourseId(item.course) === learningId
+          );
+
+          if (matchedCourse?.id) {
+            setResolvedEnrollmentId(matchedCourse.id);
+            res = await courseApi.myEnrolledCourseDetail(matchedCourse.id);
+          }
+        }
+
         setMyCourseDetail(res?.data ?? null);
       } catch {
         setMyCourseDetail(null);

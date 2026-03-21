@@ -15,6 +15,7 @@ import InstructorDashboard from './pages/instructor/InstructorDashboard';
 import Learn from './pages/Learn';
 import Search from './pages/Search';
 import Profile from './pages/Profile';
+import Certificate from './pages/Certificate';
 import Help from './pages/Help';
 import AboutUs from './pages/AboutUs';
 import ContactUs from './pages/ContactUs';
@@ -92,6 +93,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'certificate/:courseId',
+        element: (
+          <ProtectedRoute>
+            <Certificate />
           </ProtectedRoute>
         ),
       },

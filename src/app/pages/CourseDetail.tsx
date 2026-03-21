@@ -22,8 +22,9 @@ import {
   PlayCircle,
   FileText,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/store/AuthContext';
+import { courseApi } from '@/app/services/api';
 import { toast } from 'sonner';
 
 export function CourseDetail() {
@@ -36,6 +37,7 @@ export function CourseDetail() {
   const [creditNumber, setCreditNumber] = useState('');
   const [securityCode, setSecurityCode] = useState('');
   const [isBuyingNow, setIsBuyingNow] = useState(false);
+  const [apiCourse, setApiCourse] = useState<Course | null>(null);
 
   const { isAuthenticated, user, enrollInCourse } = useAuth();
   const stateCourse = (location.state as { course?: Course } | null)?.course;
@@ -51,10 +53,67 @@ export function CourseDetail() {
   })();
 
   const course =
-    (stateCourse && stateCourse.id === id ? stateCourse : undefined) ??
-    cachedCourses.find((c) => c.id === id) ??
+    (stateCourse && (stateCourse.id === id || stateCourse.slug === id) ? stateCourse : undefined) ??
+    apiCourse ??
+    cachedCourses.find((c) => c.id === id || c.slug === id) ??
     courses.find((c) => c.id === id);
   const isEnrolled = !!user?.enrolledCourseIds?.includes(course?.id ?? '');
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCourseDetail = async () => {
+      if (!id || stateCourse) return;
+
+      try {
+        const detail = await courseApi.publicDetail(id);
+        if (!active || !detail) return;
+
+        const seed =
+          cachedCourses.find((item) => item.id === id || item.slug === id) ??
+          courses.find((item) => item.id === id);
+
+        setApiCourse({
+          id: detail.id ?? seed?.id ?? id,
+          slug: detail.slug ?? seed?.slug ?? id,
+          title: detail.title ?? seed?.title ?? 'Untitled course',
+          instructor: seed?.instructor ?? 'Digital Academy',
+          rating: seed?.rating ?? 4.7,
+          reviewCount: seed?.reviewCount ?? 0,
+          price: detail.discount_price ?? detail.base_price ?? seed?.price ?? 0,
+          originalPrice: detail.base_price ?? seed?.originalPrice,
+          image: detail.cover_img ?? seed?.image ?? 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1080&q=80',
+          category: seed?.category ?? 'development',
+          level: seed?.level ?? 'All Levels',
+          duration: seed?.duration ?? 'Self-paced',
+          students: seed?.students ?? 0,
+          description: detail.desc ?? seed?.description ?? '',
+          lastUpdated: seed?.lastUpdated ?? '2026',
+          language: seed?.language ?? 'English',
+          whatYouWillLearn: seed?.whatYouWillLearn ?? ['Course content available after enrollment'],
+          requirements: seed?.requirements ?? ['Internet connection'],
+          curriculum: Array.isArray(detail.units) && detail.units.length > 0
+            ? detail.units.map((unit: any) => ({
+                section: unit.title,
+                lectures: Array.isArray(unit.lessons) ? unit.lessons.length : 0,
+                duration: '--',
+              }))
+            : (seed?.curriculum ?? [{ section: 'Main Content', lectures: 1, duration: '--' }]),
+          bestseller: seed?.bestseller,
+        });
+      } catch {
+        if (active) {
+          setApiCourse(null);
+        }
+      }
+    };
+
+    loadCourseDetail();
+
+    return () => {
+      active = false;
+    };
+  }, [id, stateCourse]);
 
   if (!course) {
     return (
@@ -74,7 +133,7 @@ export function CourseDetail() {
 
   const handleBuyNow = () => {
     if (!isAuthenticated) {
-      navigate('/login', { state: { from: { pathname: `/course/${course.id}` } } });
+      navigate('/login', { state: { from: { pathname: `/course/${course.slug ?? course.id}` } } });
       return;
     }
 
@@ -102,7 +161,7 @@ export function CourseDetail() {
 
     try {
       setIsBuyingNow(true);
-      enrollInCourse(course.id, course.title, course.price);
+      await enrollInCourse(course.id, course.title, course.price);
       setIsBuyNowOpen(false);
       setCreditNumber('');
       setSecurityCode('');
@@ -436,7 +495,7 @@ export function CourseDetail() {
               <h2 className="text-2xl font-bold mb-6">More Courses You Might Like</h2>
               <div className="grid md:grid-cols-2 gap-6">
                 {relatedCourses.map((relatedCourse) => (
-                  <Link key={relatedCourse.id} to={`/course/${relatedCourse.id}`}>
+                  <Link key={relatedCourse.id} to={`/course/${relatedCourse.slug ?? relatedCourse.id}`}>
                     <Card className="hover:shadow-lg transition-shadow">
                       <div className="flex gap-4">
                         <img
