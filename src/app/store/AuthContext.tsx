@@ -5,6 +5,11 @@ import { authApi, courseApi, orderApi, resolveCourseId, setTokens, clearTokens, 
 interface AuthContextType extends AuthState {
   apiAvailable: boolean;
   login: (email: string, password: string) => Promise<'student' | 'instructor'>;
+  authenticateWithTokens: (
+    access: string,
+    refresh: string,
+    profileHint?: { email?: string; username?: string; fullName?: string; firstName?: string; lastName?: string }
+  ) => Promise<'student' | 'instructor'>;
   register: (name: string, email: string, password: string, role: 'student' | 'instructor') => Promise<'verification_sent'>;
   verifyRegistration: (name: string, email: string, code: string, role: 'student' | 'instructor') => Promise<'student' | 'instructor'>;
   logout: () => void;
@@ -30,6 +35,70 @@ function mapApiRole(role?: string): 'student' | 'instructor' {
   const normalized = role?.toUpperCase();
   if (normalized === 'TEACHER' || normalized === 'ADMIN' || normalized === 'INSTRUCTOR') return 'instructor';
   return 'student';
+}
+
+function parseJwtClaims(token: string): Record<string, any> | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function pickFirstString(...values: Array<unknown>): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function normalizeLoginPayload(payload: any): {
+  access: string;
+  refresh: string;
+  user: { id?: string; email?: string; username?: string | null; role?: string };
+} | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const root = payload as Record<string, any>;
+  const nested = (root.data && typeof root.data === 'object') ? root.data : null;
+
+  const access =
+    root.access ??
+    root.access_token ??
+    root.tokens?.access ??
+    root.tokens?.access_token ??
+    nested?.access ??
+    nested?.access_token ??
+    nested?.tokens?.access ??
+    nested?.tokens?.access_token;
+
+  const refresh =
+    root.refresh ??
+    root.refresh_token ??
+    root.tokens?.refresh ??
+    root.tokens?.refresh_token ??
+    nested?.refresh ??
+    nested?.refresh_token ??
+    nested?.tokens?.refresh ??
+    nested?.tokens?.refresh_token;
+
+  const user = (root.user ?? nested?.user ?? {}) as {
+    id?: string;
+    email?: string;
+    username?: string | null;
+    role?: string;
+  };
+
+  if (!access || !refresh) return null;
+
+  return {
+    access: String(access),
+    refresh: String(refresh),
+    user,
+  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -94,20 +163,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       const data = await authApi.login(email, password);
-      if (
-        !data?.data?.tokens?.access ||
-        !data?.data?.tokens?.refresh ||
-        !data?.data?.user?.email
-      ) {
+      const normalized = normalizeLoginPayload(data);
+
+      if (!normalized) {
         throw new Error('API response is empty or invalid.');
       }
 
-      setTokens(data.data.tokens.access, data.data.tokens.refresh);
-      const role = mapApiRole(data.data.user.role);
+      setTokens(normalized.access, normalized.refresh);
+      const claims = parseJwtClaims(normalized.access);
+      const role = mapApiRole(
+        (normalized.user?.role as string | undefined) ??
+        (claims?.role as string | undefined) ??
+        undefined
+      );
+
+      const resolvedEmail = normalized.user?.email ?? (claims?.email as string | undefined) ?? email;
       const u: User = {
-        id: data.data.user.id ?? String(Date.now()),
-        name: data.data.user.username ?? email.split('@')[0],
-        email: data.data.user.email,
+        id: normalized.user.id ?? String(claims?.user_id ?? claims?.id ?? Date.now()),
+        name: normalized.user.username ?? resolvedEmail.split('@')[0],
+        email: resolvedEmail,
         role,
         enrolledCourseIds: [],
         createdAt: new Date().toISOString(),
@@ -125,44 +199,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string, role: 'student' | 'instructor') => {
-    try {
-      await authApi.register({ name, email, password, role });
-      setApiAvailable(true);
-      return 'verification_sent';
-    } catch (err: any) {
-      setApiAvailable(false);
-      throw new Error(err?.message ?? 'Registration failed');
+  const authenticateWithTokens = async (
+    access: string,
+    refresh: string,
+    profileHint?: { email?: string; username?: string; fullName?: string; firstName?: string; lastName?: string }
+  ) => {
+    const claims = parseJwtClaims(access);
+    const role = mapApiRole((claims?.role as string | undefined) ?? undefined);
+    const email = pickFirstString(
+      profileHint?.email,
+      claims?.email,
+      claims?.username,
+      state.user?.email
+    );
+    const nameFromHint = pickFirstString(
+      profileHint?.fullName,
+      [profileHint?.firstName, profileHint?.lastName].filter(Boolean).join(' '),
+      profileHint?.username
+    );
+    const nameFromClaims = pickFirstString(
+      claims?.full_name,
+      claims?.name,
+      [claims?.first_name, claims?.last_name].filter(Boolean).join(' '),
+      claims?.username
+    );
+    const fallbackName = email ? email.split('@')[0] : 'student';
+    const userId = String(claims?.user_id ?? claims?.id ?? Date.now());
+
+    setTokens(access, refresh);
+
+    const u: User = {
+      id: userId,
+      name: pickFirstString(nameFromHint, nameFromClaims, state.user?.name, fallbackName),
+      email,
+      role,
+      enrolledCourseIds: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    setState({ user: u, isAuthenticated: true });
+    seedNotifications(u.name, role === 'instructor' ? '/instructor' : '/profile');
+    setApiAvailable(true);
+
+    if (role === 'student') {
+      await syncStudentData().catch(() => {});
     }
+
+    return role;
   };
 
-  const verifyRegistration = async (name: string, email: string, code: string, role: 'student' | 'instructor') => {
-    try {
-      const data = await authApi.verifyCode(email, code);
-      if (!data?.tokens?.access || !data?.tokens?.refresh || !data?.user?.id) {
-        throw new Error('Verification response is incomplete.');
-      }
+  const register = async (name: string, email: string, password: string, role: 'student' | 'instructor') => {
+    setApiAvailable(false);
+    await authApi.register({ name, email, password, role });
+    return 'verification_sent';
+  };
 
-      setTokens(data.tokens.access, data.tokens.refresh);
-      const u: User = {
-        id: data.user.id,
-        name: data.user.username ?? name,
-        email: data.user.email,
-        role,
-        enrolledCourseIds: [],
-        createdAt: new Date().toISOString(),
-      };
-      setState({ user: u, isAuthenticated: true });
-      seedNotifications(u.name, role === 'instructor' ? '/instructor' : '/profile');
-      setApiAvailable(true);
-      if (role === 'student') {
-        await syncStudentData();
-      }
-      return role;
-    } catch (err: any) {
-      setApiAvailable(false);
-      throw new Error(err?.message ?? 'Verification failed');
-    }
+  const verifyRegistration = async (_name: string, email: string, code: string, _role: 'student' | 'instructor') => {
+    setApiAvailable(false);
+    await authApi.verifyCode(email, code);
+    return 'student';
   };
 
   const logout = () => {
@@ -216,7 +311,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const markAllNotificationsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   return (
-    <AuthContext.Provider value={{ ...state, apiAvailable, login, register, verifyRegistration, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
+    <AuthContext.Provider value={{ ...state, apiAvailable, login, authenticateWithTokens, register, verifyRegistration, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
       {children}
     </AuthContext.Provider>
   );

@@ -55,6 +55,15 @@ export default function Profile() {
   const profileForm = useForm<ProfileForm>({ defaultValues: { name: user?.name || '', email: user?.email || '', bio: user?.bio || '' } });
   const passwordForm = useForm<PasswordForm>();
 
+  useEffect(() => {
+    profileForm.reset({
+      name: user?.name || '',
+      email: user?.email || '',
+      bio: user?.bio || '',
+    });
+    setAvatarPreview(user?.avatar || '');
+  }, [user?.name, user?.email, user?.bio, user?.avatar]);
+
   // Sync tab from URL param when it changes
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab;
@@ -278,7 +287,7 @@ export default function Profile() {
                               </Button>
                             </Link>
                             {pct === 100 && (
-                              <Link to={`/certificate/${course.courseId}`}>
+                              <Link to={`/certificate/${course.enrollmentId}`}>
                                 <Button size="sm" variant="outline" className="w-full text-xs border-green-500 text-green-700 hover:bg-green-50">
                                   <Award className="w-3 h-3 mr-1" />
                                   Certificate
@@ -398,7 +407,7 @@ export default function Profile() {
                           </div>
                           <div className="flex-shrink-0">
                             {completed ? (
-                              <Link to={`/certificate/${course.courseId}`}>
+                              <Link to={`/certificate/${course.enrollmentId}`}>
                                 <Button size="sm" className="bg-green-600 hover:bg-green-700">
                                   <Award className="w-3 h-3 mr-1" /> View Certificate
                                 </Button>

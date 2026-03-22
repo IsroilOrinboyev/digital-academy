@@ -7,6 +7,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import AuthCallback from './pages/auth/AuthCallback';
+import SetInitialPassword from './pages/auth/SetInitialPassword';
 import NotFound from './pages/NotFound';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
@@ -33,6 +35,22 @@ export const router = createBrowserRouter([
   {
     path: '/forgot-password',
     Component: ForgotPassword,
+  },
+  {
+    path: '/auth/callback',
+    Component: AuthCallback,
+  },
+  {
+    path: '/auth/callback/',
+    Component: AuthCallback,
+  },
+  {
+    path: '/set-password/:userId',
+    Component: SetInitialPassword,
+  },
+  {
+    path: '/set-password/:userId/',
+    Component: SetInitialPassword,
   },
   {
     path: '/learn/:courseId',

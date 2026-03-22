@@ -1,122 +1,36 @@
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router';
-import { toast } from 'sonner';
-import { useAuth } from '@/app/store/AuthContext';
+import { Link } from 'react-router';
+import { X } from 'lucide-react';
+import { authApi } from '@/app/services/api';
 import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
-import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
 
-interface SignupForm {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  code: string;
-  role: 'student' | 'instructor';
-}
-
 export default function Signup() {
-  const { register: registerUser, verifyRegistration } = useAuth();
-  const navigate = useNavigate();
-  const [pendingSignup, setPendingSignup] = useState<Pick<SignupForm, 'name' | 'email' | 'role'> | null>(null);
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<SignupForm>({
-    defaultValues: { role: 'student', code: '' }
-  });
-
-  const onSubmit = async (data: SignupForm) => {
-    try {
-      await registerUser(data.name, data.email, data.password, data.role);
-      setPendingSignup({ name: data.name, email: data.email, role: data.role });
-      toast.success('Verification code sent. Check your email.');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Registration failed. Please try again.');
-    }
-  };
-
-  const onVerify = async (data: SignupForm) => {
-    if (!pendingSignup) return;
-
-    try {
-      await verifyRegistration(pendingSignup.name, pendingSignup.email, data.code, pendingSignup.role);
-      toast.success('Account verified! Welcome to Digital Academy.');
-      navigate('/dashboard');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Verification failed. Please try again.');
-    }
+  const handleGoogleLogin = () => {
+    window.location.href = authApi.getGoogleLoginUrl();
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
       <Card className="w-full max-w-md">
+        <div className="flex justify-end p-2 pb-0">
+          <Link
+            to="/"
+            aria-label="Continue as guest"
+            className="inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X className="w-4 h-4" />
+          </Link>
+        </div>
         <CardHeader className="text-center">
           <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">D</div>
-          <CardTitle className="text-2xl">{pendingSignup ? 'Verify your email' : 'Create your account'}</CardTitle>
-          <CardDescription>
-            {pendingSignup ? `Enter the verification code sent to ${pendingSignup.email}` : 'Join millions of learners worldwide'}
-          </CardDescription>
+          <CardTitle className="text-2xl">Create your account</CardTitle>
+          <CardDescription>Sign up with Google to continue</CardDescription>
         </CardHeader>
         <CardContent>
-          {!pendingSignup ? (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" placeholder="John Doe" {...register('name', { required: 'Name is required' })} />
-              {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@example.com" {...register('email', { required: 'Email is required' })} />
-              {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="Min. 8 characters" {...register('password', { required: 'Password required', minLength: { value: 8, message: 'Min 8 characters' } })} />
-              {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input id="confirmPassword" type="password" placeholder="Repeat password" {...register('confirmPassword', {
-                required: 'Please confirm password',
-                validate: (v: string) => v === watch('password') || 'Passwords do not match'
-              })} />
-              {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label>I want to</Label>
-              <div className="grid grid-cols-2 gap-3">
-                {(['student', 'instructor'] as const).map(role => (
-                  <label key={role} className="cursor-pointer">
-                    <input type="radio" value={role} {...register('role')} className="sr-only peer" />
-                    <div className="border-2 rounded-lg p-3 text-center peer-checked:border-purple-600 peer-checked:bg-purple-50 hover:border-purple-300 transition-colors">
-                      <div className="text-lg">{role === 'student' ? '🎓' : '👨‍🏫'}</div>
-                      <div className="text-sm font-medium capitalize">{role}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating account...' : 'Create Account'}
-            </Button>
-          </form>
-          ) : (
-          <form onSubmit={handleSubmit(onVerify)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="code">Verification Code</Label>
-              <Input
-                id="code"
-                placeholder="Enter the code from your email"
-                {...register('code', { required: 'Verification code is required' })}
-              />
-              {errors.code && <p className="text-sm text-red-500">{errors.code.message}</p>}
-            </div>
-            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
-              {isSubmitting ? 'Verifying...' : 'Verify Account'}
-            </Button>
-          </form>
-          )}
+          <Button type="button" variant="outline" className="w-full" onClick={handleGoogleLogin}>
+            Continue with Google
+          </Button>
+
           <p className="text-center text-sm text-gray-600 mt-4">
             Already have an account?{' '}
             <Link to="/login" className="text-purple-600 hover:underline font-medium">Sign in</Link>

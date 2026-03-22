@@ -1,7 +1,9 @@
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
+import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/store/AuthContext';
+import { authApi } from '@/app/services/api';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -28,9 +30,22 @@ export default function Login() {
     }
   };
 
+  const handleGoogleLogin = () => {
+    window.location.href = authApi.getGoogleLoginUrl();
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-md">
+        <div className="flex justify-end p-2 pb-0">
+          <Link
+            to="/"
+            aria-label="Continue as guest"
+            className="inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X className="w-4 h-4" />
+          </Link>
+        </div>
         <CardHeader className="text-center">
           <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">D</div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
@@ -63,6 +78,9 @@ export default function Login() {
             </div>
             <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
               {isSubmitting ? 'Signing in...' : 'Sign In'}
+            </Button>
+            <Button type="button" variant="outline" className="w-full" onClick={handleGoogleLogin}>
+              Continue with Google
             </Button>
           </form>
           <p className="text-center text-sm text-gray-600 mt-4">

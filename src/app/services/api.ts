@@ -6,6 +6,11 @@ const REFRESH_KEY = 'da_refresh_token';
 const CATEGORY_ENDPOINT_PATH = '/api/users/category/';
 const TEACHER_COURSES_ENDPOINT = '/api/teachers/courses/';
 
+const CATEGORY_CACHE_KEY = 'da_category_cache';
+const CATEGORY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let categoriesInFlight: Promise<CategoryListResponse> | null = null;
+
 type MaybeWrappedResponse<T> = T | { success?: boolean; status?: number; data?: T };
 
 function unwrapApiData<T>(response: MaybeWrappedResponse<T> | null | undefined, fallback: T): T {
@@ -21,6 +26,28 @@ function wrapApiData<T>(response: MaybeWrappedResponse<T> | null | undefined, fa
     status: 200,
     data: unwrapApiData(response, fallback),
   };
+}
+
+function extractApiErrorMessage(err: any): string | null {
+  if (!err || typeof err !== 'object') return null;
+
+  if (typeof err.detail === 'string' && err.detail.trim()) return err.detail;
+  if (typeof err.message === 'string' && err.message.trim()) return err.message;
+  if (typeof err.error === 'string' && err.error.trim()) return err.error;
+
+  for (const value of Object.values(err)) {
+    if (typeof value === 'string' && value.trim()) return value;
+    if (Array.isArray(value) && value.length > 0) {
+      const first = value[0];
+      if (typeof first === 'string' && first.trim()) return first;
+    }
+    if (value && typeof value === 'object') {
+      const nested = extractApiErrorMessage(value);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
 }
 
 export function getAccessToken(): string | null {
@@ -86,7 +113,7 @@ export async function apiRequest<T>(
     if (raw) {
       try {
         const err = JSON.parse(raw);
-        message = err?.detail ?? err?.message ?? message;
+        message = extractApiErrorMessage(err) ?? message;
       } catch {
         message = `${message}: ${raw.slice(0, 220)}`;
       }
@@ -111,6 +138,45 @@ export async function apiRequest<T>(
   }
 
   return raw as T;
+}
+
+export async function apiRequestBlob(
+  endpoint: string,
+  options: RequestInit = {},
+  retry = true
+): Promise<Blob> {
+  const token = getAccessToken();
+  const headers = new Headers(options.headers ?? {});
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+
+  if (res.status === 401 && retry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return apiRequestBlob(endpoint, options, false);
+    throw new Error('UNAUTHORIZED');
+  }
+
+  if (!res.ok) {
+    const raw = await res.text();
+    let message = `HTTP ${res.status}`;
+
+    if (raw) {
+      try {
+        const err = JSON.parse(raw);
+        message = extractApiErrorMessage(err) ?? message;
+      } catch {
+        message = `${message}: ${raw.slice(0, 220)}`;
+      }
+    }
+
+    throw new Error(message);
+  }
+
+  return res.blob();
 }
 
 export interface CreateUnitPayload {
@@ -317,6 +383,7 @@ export interface UpdateCoursePayload {
 export interface CourseProgressApiResponse {
   success?: boolean;
   status_code?: number;
+  status?: string | number;
   data?: {
     progress?: number;
     status?: string;
@@ -324,7 +391,6 @@ export interface CourseProgressApiResponse {
   };
   progress?: number;
   status_text?: string;
-  status?: string;
   completed_lectures?: string[];
 }
 
@@ -353,34 +419,11 @@ export function resolveCourseId(course: MyCourseListItem['course']): string {
 
 // ── Auth endpoints ─────────────────────────────────────────────────────────
 export interface LoginApiResponse {
-  success: boolean;
-  status: number;
-  data: {
-    message: string;
-    requires_password_change: boolean;
-    user: {
-      id: string;
-      username: string | null;
-      email: string;
-      role: string;
-    };
-    tokens: {
-      refresh: string;
-      access: string;
-    };
-  };
-}
-
-export interface VerifyCodeApiResponse {
-  message: string;
+  access: string;
+  refresh: string;
   user: {
     id: string;
-    username: string | null;
     email: string;
-  };
-  tokens: {
-    refresh: string;
-    access: string;
   };
 }
 
@@ -406,21 +449,24 @@ export const authApi = {
     }
   },
 
-  register: (data: { name: string; email: string; password: string; role: string }) =>
-    apiRequest<any>('/api/users/auth/register/', {
-      method: 'POST',
+  getGoogleLoginUrl: () => `${BASE_URL}/api/users/auth/google/login/`,
+
+  setInitialPassword: (userId: string, newPassword: string) =>
+    apiRequest<{ message: string }>(`/api/users/auth/set-password/${userId}/`, {
+      method: 'PATCH',
       body: JSON.stringify({
-        username: data.name,
-        email: data.email,
-        password: data.password,
+        new_password1: newPassword,
+        new_password2: newPassword,
       }),
     }),
 
-  verifyCode: (email: string, code: string) =>
-    apiRequest<VerifyCodeApiResponse>('/api/users/auth/verify-code/', {
-      method: 'POST',
-      body: JSON.stringify({ email, code }),
-    }),
+  register: async (_data: { name: string; email: string; password: string; role: string }) => {
+    throw new Error('Registration endpoint was removed in backend. Use Google login or admin-created accounts.');
+  },
+
+  verifyCode: async (_email: string, _code: string) => {
+    throw new Error('Verification endpoint was removed in backend.');
+  },
 
   logout: async () => undefined,
 
@@ -428,8 +474,9 @@ export const authApi = {
 
   updateProfile: async (data: Partial<{ name: string; email: string; bio: string; avatar: string }>) => data,
 
-  changePassword: (data: { old_password: string; new_password: string }) =>
-    apiRequest<void>('/api/users/auth/update-password/', { method: 'POST', body: JSON.stringify(data) }),
+  changePassword: async (_data: { old_password: string; new_password: string }) => {
+    throw new Error('Password change endpoint is not available in current backend auth API.');
+  },
 };
 
 // ── Course endpoints ───────────────────────────────────────────────────────
@@ -675,12 +722,67 @@ export const courseApi = {
       total,
     };
   },
+
+  downloadCertificate: (enrollmentId: string) =>
+    apiRequestBlob(`/api/users/my-courses/${enrollmentId}/certificate/`, {
+      method: 'POST',
+    }),
 };
 
 export const categoryApi = {
   list: async () => {
-    const response = await apiRequest<MaybeWrappedResponse<CategoryItem[]>>(CATEGORY_ENDPOINT_PATH);
-    return wrapApiData(response, [] as CategoryItem[]);
+    if (categoriesInFlight) {
+      return categoriesInFlight;
+    }
+
+    const loadCategories = async (): Promise<CategoryListResponse> => {
+      const now = Date.now();
+
+      try {
+        const cachedRaw = localStorage.getItem(CATEGORY_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw) as { ts: number; data: CategoryItem[] };
+          if (Array.isArray(cached.data) && now - Number(cached.ts ?? 0) < CATEGORY_CACHE_TTL_MS) {
+            return wrapApiData(cached.data, [] as CategoryItem[]);
+          }
+        }
+      } catch {
+        // Ignore cache parsing issues and continue with network request.
+      }
+
+      try {
+        const response = await apiRequest<MaybeWrappedResponse<CategoryItem[]>>(CATEGORY_ENDPOINT_PATH);
+        const wrapped = wrapApiData(response, [] as CategoryItem[]);
+
+        try {
+          localStorage.setItem(CATEGORY_CACHE_KEY, JSON.stringify({ ts: now, data: wrapped.data }));
+        } catch {
+          // Ignore storage quota/access issues.
+        }
+
+        return wrapped;
+      } catch (error: any) {
+        try {
+          const cachedRaw = localStorage.getItem(CATEGORY_CACHE_KEY);
+          if (cachedRaw) {
+            const cached = JSON.parse(cachedRaw) as { data: CategoryItem[] };
+            if (Array.isArray(cached.data)) {
+              return wrapApiData(cached.data, [] as CategoryItem[]);
+            }
+          }
+        } catch {
+          // No usable cache.
+        }
+
+        throw error;
+      }
+    };
+
+    categoriesInFlight = loadCategories().finally(() => {
+      categoriesInFlight = null;
+    });
+
+    return categoriesInFlight;
   },
 };
 

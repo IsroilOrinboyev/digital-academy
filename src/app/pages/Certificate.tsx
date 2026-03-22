@@ -13,13 +13,12 @@ import { courses, type Course } from '@/app/data/courses';
 import { mapApiCourseToCourse } from '@/app/utils/courseMapper';
 
 interface CertificateCourseData {
+  enrollmentId: string;
   courseId: string;
   title: string;
   instructor: string;
   category: string;
   duration: string;
-  completed: boolean;
-  progress: number;
 }
 
 function loadCachedCourses(): Course[] {
@@ -42,7 +41,7 @@ function formatDate(value: Date): string {
 }
 
 export default function Certificate() {
-  const { courseId } = useParams<{ courseId: string }>();
+  const { courseId: routeId } = useParams<{ courseId: string }>();
   const { user } = useAuth();
   const certificateRef = useRef<HTMLDivElement>(null);
 
@@ -52,14 +51,14 @@ export default function Certificate() {
 
   const completionDate = useMemo(() => formatDate(new Date()), []);
   const certificateId = useMemo(() => {
-    const seed = `${user?.id ?? 'guest'}:${courseId ?? 'course'}`;
+    const seed = `${user?.id ?? 'guest'}:${routeId ?? 'course'}`;
     const hash = Array.from(seed).reduce((acc, ch) => ((acc << 5) - acc + ch.charCodeAt(0)) | 0, 0);
     return `DA-${Math.abs(hash).toString(16).toUpperCase()}`;
-  }, [courseId, user?.id]);
+  }, [routeId, user?.id]);
 
   useEffect(() => {
     const loadCertificateData = async () => {
-      if (!courseId || !user) {
+      if (!routeId || !user) {
         setLoading(false);
         return;
       }
@@ -72,7 +71,7 @@ export default function Certificate() {
 
         const enrolled = (myCoursesRes.data ?? []).find((item) => {
           const resolved = resolveCourseId(item.course);
-          return item.id === courseId || resolved === courseId;
+          return item.id === routeId || resolved === routeId;
         });
 
         const cached = loadCachedCourses();
@@ -80,16 +79,18 @@ export default function Certificate() {
         const apiPool = (publicCoursesRes.data ?? []).map(mapApiCourseToCourse);
         const allCourses = [...apiPool, ...localPool];
 
-        const match = allCourses.find((item) => item.id === courseId || item.slug === courseId || item.id === resolveCourseId(enrolled?.course ?? null));
+        const resolvedCourseId = resolveCourseId(enrolled?.course ?? null);
+        const match = allCourses.find((item) => item.id === routeId || item.slug === routeId || item.id === resolvedCourseId);
+
+        const enrollmentId = enrolled?.id ?? routeId;
 
         setCourseData({
-          courseId: match?.id ?? resolveCourseId(enrolled?.course ?? null) ?? courseId,
+          enrollmentId,
+          courseId: match?.id ?? resolvedCourseId ?? routeId,
           title: match?.title ?? 'Course',
           instructor: match?.instructor ?? 'Digital Academy',
           category: match?.category ?? 'General',
           duration: match?.duration ?? 'Self-paced',
-          completed: Number(enrolled?.progress ?? 0) >= 100,
-          progress: Math.max(0, Math.min(100, Number(enrolled?.progress ?? 0))),
         });
       } catch {
         setCourseData(null);
@@ -99,10 +100,10 @@ export default function Certificate() {
     };
 
     loadCertificateData();
-  }, [courseId, user]);
+  }, [routeId, user]);
 
   const exportAsPng = async () => {
-    if (!certificateRef.current || !courseData?.completed) return;
+    if (!certificateRef.current || !courseData) return;
 
     try {
       setDownloading('png');
@@ -127,33 +128,22 @@ export default function Certificate() {
   };
 
   const exportAsPdf = async () => {
-    if (!certificateRef.current || !courseData?.completed) return;
+    if (!courseData) return;
 
     try {
       setDownloading('pdf');
-      const sourceCanvas = await toCanvas(certificateRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: '#f6f0de',
-      });
-
-      const sourceWidth = sourceCanvas.width;
-      const sourceHeight = sourceCanvas.height;
-      const orientation = sourceWidth >= sourceHeight ? 'landscape' : 'portrait';
-
-      // Match PDF page size to the certificate image size to avoid any fit/crop artifacts.
-      const pdf = new jsPDF({
-        orientation,
-        unit: 'px',
-        format: [sourceWidth, sourceHeight],
-      });
-
-      const imageData = sourceCanvas.toDataURL('image/png');
-      pdf.addImage(imageData, 'PNG', 0, 0, sourceWidth, sourceHeight);
-      pdf.save(`${courseData.title.replace(/\s+/g, '-').toLowerCase()}-certificate.pdf`);
-      toast.success('Certificate downloaded as PDF.');
-    } catch {
-      toast.error('PDF download failed. Please try again.');
+      const blob = await courseApi.downloadCertificate(courseData.enrollmentId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${courseData.title.replace(/\s+/g, '-').toLowerCase()}-certificate.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Official certificate downloaded as PDF.');
+    } catch (error: any) {
+      toast.error(error?.message ?? 'PDF download failed. Please try again.');
     } finally {
       setDownloading(null);
     }
@@ -182,30 +172,6 @@ export default function Certificate() {
             <Link to="/profile?tab=credentials">
               <Button>Back to Credentials</Button>
             </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!courseData.completed) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16">
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Award className="w-12 h-12 mx-auto text-amber-500 mb-4" />
-            <h1 className="text-2xl font-bold mb-2">Finish The Course To Unlock Your Certificate</h1>
-            <p className="text-gray-600 mb-6">
-              You are currently at {courseData.progress}% completion for {courseData.title}.
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
-              <Link to="/profile?tab=credentials">
-                <Button variant="outline">Back to Credentials</Button>
-              </Link>
-              <Link to={`/learn/${courseId}`}>
-                <Button className="bg-amber-600 hover:bg-amber-700">Continue Learning</Button>
-              </Link>
-            </div>
           </CardContent>
         </Card>
       </div>

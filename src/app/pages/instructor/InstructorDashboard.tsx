@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/app/store/AuthContext';
 import { categoryApi, CategoryItem, courseApi, quizApi, UserCourseItem } from '@/app/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -154,6 +154,7 @@ const mockChartData = [
 
 export default function InstructorDashboard() {
   useAuth();
+  const didLoadInitialDataRef = useRef(false);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingQuiz, setIsCreatingQuiz] = useState(false);
@@ -186,6 +187,9 @@ export default function InstructorDashboard() {
   });
 
   useEffect(() => {
+    if (didLoadInitialDataRef.current) return;
+    didLoadInitialDataRef.current = true;
+
     const loadInitialData = async () => {
       setIsLoadingCourses(true);
       const [categoryResult, courseResult] = await Promise.allSettled([
