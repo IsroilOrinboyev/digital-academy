@@ -1,5 +1,5 @@
 // Base URL from env variable, defaults to Django dev server
-const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? 'https://api.digital-academy.live';
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'https://api.digital-academy.live';
 
 const TOKEN_KEY = 'da_access_token';
 const REFRESH_KEY = 'da_refresh_token';
@@ -680,11 +680,13 @@ export const courseApi = {
     return wrapApiData(response, null as MyCourseDetailResponse['data'] | null);
   },
 
-  submitUserQuiz: (quizId: string, data: SubmitUserQuizPayload) =>
-    apiRequest<QuizSubmitResultResponseExtended>(`/api/users/quiz/${quizId}/submit/`, {
+  submitUserQuiz: async (quizId: string, data: SubmitUserQuizPayload) => {
+    const response = await apiRequest<MaybeWrappedResponse<QuizSubmitResultResponseExtended['data']>>(`/api/users/quiz/${quizId}/submit/`, {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    });
+    return wrapApiData(response, null as QuizSubmitResultResponseExtended['data'] | null);
+  },
 
   enroll: (id: string) =>
     apiRequest<void>('/api/users/enrolment/', {
