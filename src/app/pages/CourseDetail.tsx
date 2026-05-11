@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate, useLocation } from 'react-router';
-import { courses, Course } from '../data/courses';
+import { type Course } from '../data/courses';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
@@ -26,6 +26,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/store/AuthContext';
 import { courseApi } from '@/app/services/api';
 import { toast } from 'sonner';
+import { Skeleton } from '../components/ui/skeleton';
+import { ErrorState } from '../components/ui/ErrorState';
 
 export function CourseDetail() {
   const { id } = useParams();
@@ -38,6 +40,8 @@ export function CourseDetail() {
   const [securityCode, setSecurityCode] = useState('');
   const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [apiCourse, setApiCourse] = useState<Course | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(true);
+  const [hasDetailError, setHasDetailError] = useState(false);
 
   const { isAuthenticated, user, enrollInCourse } = useAuth();
   const stateCourse = (location.state as { course?: Course } | null)?.course;
@@ -55,23 +59,30 @@ export function CourseDetail() {
   const course =
     (stateCourse && (stateCourse.id === id || stateCourse.slug === id) ? stateCourse : undefined) ??
     apiCourse ??
-    cachedCourses.find((c) => c.id === id || c.slug === id) ??
-    courses.find((c) => c.id === id);
+    cachedCourses.find((c) => c.id === id || c.slug === id);
   const isEnrolled = !!user?.enrolledCourseIds?.includes(course?.id ?? '');
 
   useEffect(() => {
     let active = true;
 
     const loadCourseDetail = async () => {
-      if (!id || stateCourse) return;
+      if (!id) return;
+
+      // If we have the course from route state, skip fetch but mark loading done
+      if (stateCourse) {
+        if (active) setIsLoadingDetail(false);
+        return;
+      }
+
+      setIsLoadingDetail(true);
+      setHasDetailError(false);
 
       try {
         const detail = await courseApi.publicDetail(id);
         if (!active || !detail) return;
 
         const seed =
-          cachedCourses.find((item) => item.id === id || item.slug === id) ??
-          courses.find((item) => item.id === id);
+          cachedCourses.find((item) => item.id === id || item.slug === id);
 
         setApiCourse({
           id: detail.id ?? seed?.id ?? id,
@@ -93,7 +104,7 @@ export function CourseDetail() {
           whatYouWillLearn: seed?.whatYouWillLearn ?? ['Course content available after enrollment'],
           requirements: seed?.requirements ?? ['Internet connection'],
           curriculum: Array.isArray(detail.units) && detail.units.length > 0
-            ? detail.units.map((unit: any) => ({
+            ? detail.units.map((unit: { title: string; lessons?: unknown[] }) => ({
                 section: unit.title,
                 lectures: Array.isArray(unit.lessons) ? unit.lessons.length : 0,
                 duration: '--',
@@ -103,8 +114,10 @@ export function CourseDetail() {
         });
       } catch {
         if (active) {
-          setApiCourse(null);
+          setHasDetailError(true);
         }
+      } finally {
+        if (active) setIsLoadingDetail(false);
       }
     };
 
@@ -115,11 +128,47 @@ export function CourseDetail() {
     };
   }, [id, stateCourse]);
 
+  if (isLoadingDetail) {
+    return (
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-8">
+        {/* Hero skeleton */}
+        <div className="bg-gray-900 rounded-2xl p-8 mb-8">
+          <Skeleton className="h-4 w-32 mb-6 bg-gray-700" />
+          <Skeleton className="h-8 w-3/4 mb-3 bg-gray-700" />
+          <Skeleton className="h-5 w-full mb-2 bg-gray-700" />
+          <Skeleton className="h-5 w-2/3 mb-6 bg-gray-700" />
+          <div className="flex gap-4">
+            <Skeleton className="h-4 w-24 bg-gray-700" />
+            <Skeleton className="h-4 w-32 bg-gray-700" />
+          </div>
+        </div>
+        {/* Curriculum skeleton */}
+        <div className="space-y-3">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (hasDetailError) {
+    return (
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-16">
+        <ErrorState
+          title="Couldn't load this course"
+          description="There was a problem fetching the course details."
+          onRetry={() => window.location.reload()}
+        />
+      </div>
+    );
+  }
+
   if (!course) {
     return (
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-16 text-center">
         <h1 className="text-3xl font-bold mb-4">Course Not Found</h1>
-        <p className="text-gray-600 mb-8">The course you're looking for doesn't exist.</p>
+        <p className="text-gray-600 dark:text-slate-400 mb-8">The course you're looking for doesn't exist.</p>
         <Link to="/courses">
           <Button>Browse All Courses</Button>
         </Link>
@@ -127,7 +176,7 @@ export function CourseDetail() {
     );
   }
 
-  const relatedCourses = [...cachedCourses, ...courses]
+  const relatedCourses = cachedCourses
     .filter((c) => c.category === course.category && c.id !== course.id)
     .slice(0, 4);
 
@@ -246,6 +295,8 @@ export function CourseDetail() {
                   <img
                     src={course.image}
                     alt={course.title}
+                    loading="eager"
+                    decoding="async"
                     className="w-full h-full object-cover rounded-t-lg"
                   />
                   <button className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
@@ -285,7 +336,7 @@ export function CourseDetail() {
                     </Button>
                   </div>
 
-                  <p className="text-center text-sm text-gray-600 mb-4">
+                  <p className="text-center text-sm text-gray-600 dark:text-slate-400 mb-4">
                     30-Day Money-Back Guarantee
                   </p>
 
@@ -362,13 +413,13 @@ export function CourseDetail() {
       </Dialog>
 
       {/* Mobile CTA */}
-      <div className="lg:hidden sticky bottom-0 bg-white border-t p-4 shadow-lg z-40">
+      <div className="lg:hidden sticky bottom-0 bg-white dark:bg-slate-900 border-t dark:border-slate-700 p-4 shadow-lg z-40">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold">${course.price}</span>
+              <span className="text-2xl font-bold dark:text-slate-100">${course.price}</span>
               {course.originalPrice && (
-                <span className="text-sm text-gray-500 line-through">
+                <span className="text-sm text-gray-500 dark:text-slate-400 line-through">
                   ${course.originalPrice}
                 </span>
               )}
@@ -387,16 +438,16 @@ export function CourseDetail() {
       {/* Main Content */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8 py-12">
         <div className="max-w-4xl">
-          <section className="rounded-3xl border border-purple-100 bg-gradient-to-br from-white to-purple-50/40 p-5 md:p-8 shadow-sm">
+          <section className="rounded-3xl border border-purple-100 dark:border-slate-700 bg-gradient-to-br from-white dark:from-slate-900 to-purple-50/40 dark:to-slate-900 p-5 md:p-8 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
               <div>
                 <p className="text-xs font-semibold tracking-wider uppercase text-purple-600 mb-1">
                   Community feedback
                 </p>
-                <h2 className="text-3xl font-bold text-gray-900">Comments</h2>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Comments</h2>
               </div>
-              <div className="inline-flex items-center gap-3 rounded-2xl bg-white px-4 py-3 border border-purple-100">
-                <div className="text-3xl font-bold leading-none text-gray-900">{course.rating.toFixed(1)}</div>
+              <div className="inline-flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-800 px-4 py-3 border border-purple-100 dark:border-slate-700">
+                <div className="text-3xl font-bold leading-none text-gray-900 dark:text-slate-100">{course.rating.toFixed(1)}</div>
                 <div>
                   <div className="flex">
                     {[...Array(5)].map((_, i) => (
@@ -410,7 +461,7 @@ export function CourseDetail() {
                       />
                     ))}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">{course.reviewCount.toLocaleString()} comments</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{course.reviewCount.toLocaleString()} comments</p>
                 </div>
               </div>
             </div>
@@ -433,7 +484,7 @@ export function CourseDetail() {
                   <textarea
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
-                    className="w-full border border-purple-100 bg-white rounded-xl p-3 text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200"
+                    className="w-full border border-purple-100 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400 rounded-xl p-3 text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200"
                     placeholder="Write your thoughts about this course..."
                   />
                   <Button
@@ -452,8 +503,8 @@ export function CourseDetail() {
             )}
 
             {!isAuthenticated || !user?.enrolledCourseIds?.includes(course.id) ? (
-              <Card className="mb-7 border-dashed border-purple-200 bg-white/90">
-                <CardContent className="p-5 text-sm text-gray-600">
+              <Card className="mb-7 border-dashed border-purple-200 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90">
+                <CardContent className="p-5 text-sm text-gray-600 dark:text-slate-400">
                   Only enrolled users can leave a comment.
                 </CardContent>
               </Card>
@@ -461,7 +512,7 @@ export function CourseDetail() {
 
             <div className="space-y-4">
               {[1, 2, 3, 4].map((review) => (
-                <Card key={review} className="border-purple-100/80 hover:shadow-md transition-shadow">
+                <Card key={review} className="border-purple-100/80 dark:border-slate-700 hover:shadow-md transition-shadow">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
                       <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-semibold shrink-0">
@@ -469,15 +520,15 @@ export function CourseDetail() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="font-semibold text-gray-900">User {review}</span>
-                          <span className="text-xs text-gray-400">• 2 weeks ago</span>
+                          <span className="font-semibold text-gray-900 dark:text-slate-100">User {review}</span>
+                          <span className="text-xs text-gray-400 dark:text-slate-500">• 2 weeks ago</span>
                         </div>
                         <div className="flex mb-2">
                           {[...Array(5)].map((_, i) => (
                             <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                           ))}
                         </div>
-                        <p className="text-sm leading-relaxed text-gray-700">
+                        <p className="text-sm leading-relaxed text-gray-700 dark:text-slate-300">
                           Very useful course. The explanations are clear, the practical examples are strong,
                           and the learning flow is easy to follow. Recommended.
                         </p>
@@ -492,7 +543,7 @@ export function CourseDetail() {
           {/* Related Courses */}
           {relatedCourses.length > 0 && (
             <div className="mt-16">
-              <h2 className="text-2xl font-bold mb-6">More Courses You Might Like</h2>
+              <h2 className="text-2xl font-bold mb-6 dark:text-slate-100">More Courses You Might Like</h2>
               <div className="grid md:grid-cols-2 gap-6">
                 {relatedCourses.map((relatedCourse) => (
                   <Link key={relatedCourse.id} to={`/course/${relatedCourse.slug ?? relatedCourse.id}`}>
@@ -501,13 +552,17 @@ export function CourseDetail() {
                         <img
                           src={relatedCourse.image}
                           alt={relatedCourse.title}
+                          width={128}
+                          height={128}
+                          loading="lazy"
+                          decoding="async"
                           className="w-32 h-32 object-cover rounded-l-lg"
                         />
                         <CardContent className="p-4 flex-1">
                           <h3 className="font-semibold mb-2 line-clamp-2">
                             {relatedCourse.title}
                           </h3>
-                          <p className="text-sm text-gray-600 mb-2">{relatedCourse.instructor}</p>
+                          <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">{relatedCourse.instructor}</p>
                           <div className="flex items-center gap-2 mb-2">
                             <span className="font-bold text-sm">
                               {relatedCourse.rating.toFixed(1)}

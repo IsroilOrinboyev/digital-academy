@@ -1,9 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { User, AuthState, Notification, Transaction } from '@/app/types';
-import { authApi, courseApi, orderApi, resolveCourseId, setTokens, clearTokens, getAccessToken } from '@/app/services/api';
+import { authApi, courseApi, orderApi, leaderboardApi, resolveCourseId, setTokens, clearTokens, getAccessToken, Tier } from '@/app/services/api';
 
 interface AuthContextType extends AuthState {
   apiAvailable: boolean;
+  coin: number;
+  tier: Tier | null;
+  leaderboardPosition: number | null;
+  refreshGamification: () => Promise<void>;
   login: (email: string, password: string) => Promise<'student' | 'instructor'>;
   authenticateWithTokens: (
     access: string,
@@ -26,6 +31,8 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const STORAGE_KEY = 'digital_academy_auth';
 const NOTIF_KEY = 'digital_academy_notifications';
 const TX_KEY = 'digital_academy_transactions';
+const GAMIFICATION_KEY = 'da_gamification';
+const LAST_TIER_KEY = 'da_last_tier';
 
 function load<T>(key: string, fallback: T): T {
   try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
@@ -107,9 +114,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>(() => load(TX_KEY, []));
   const [apiAvailable, setApiAvailable] = useState(() => Boolean(getAccessToken()));
 
+  const _savedGamification = load<{ coin: number; tier: Tier | null; leaderboardPosition: number | null }>(
+    GAMIFICATION_KEY,
+    { coin: 0, tier: null, leaderboardPosition: null }
+  );
+  const [coin, setCoin] = useState<number>(_savedGamification.coin);
+  const [tier, setTier] = useState<Tier | null>(_savedGamification.tier);
+  const [leaderboardPosition, setLeaderboardPosition] = useState<number | null>(_savedGamification.leaderboardPosition);
+
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }, [state]);
   useEffect(() => { localStorage.setItem(NOTIF_KEY, JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem(TX_KEY, JSON.stringify(transactions)); }, [transactions]);
+  useEffect(() => {
+    localStorage.setItem(GAMIFICATION_KEY, JSON.stringify({ coin, tier, leaderboardPosition }));
+  }, [coin, tier, leaderboardPosition]);
+
+  const refreshGamification = async () => {
+    if (!getAccessToken()) return;
+    try {
+      const profile = await authApi.getProfile();
+      if (profile) setCoin(profile.coin ?? 0);
+      const lb = await leaderboardApi.list();
+      const rows = lb.data ?? [];
+      const myUsername = profile?.username ?? state.user?.name ?? '';
+      const me = rows.find(r => r.username === myUsername) ?? null;
+      setTier(me?.tier ?? null);
+      setLeaderboardPosition(me?.position ?? null);
+      // Tier-up celebration
+      const prevTier = localStorage.getItem(LAST_TIER_KEY) as Tier | null;
+      if (me?.tier && me.tier !== prevTier) {
+        const TIER_ORDER: Tier[] = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'];
+        const prevIdx = prevTier ? TIER_ORDER.indexOf(prevTier) : -1;
+        const newIdx = TIER_ORDER.indexOf(me.tier);
+        // Only celebrate a tier-up when the user already had a previous tier stored.
+        // prevTier === null means first login or post-logout — no toast.
+        if (prevTier !== null && newIdx > prevIdx) {
+          toast.success(`You reached ${me.tier.charAt(0) + me.tier.slice(1).toLowerCase()} tier!`);
+        }
+        localStorage.setItem(LAST_TIER_KEY, me.tier);
+      } else if (!me && prevTier) {
+        // Demoted off leaderboard — silent, just clear cache
+        localStorage.removeItem(LAST_TIER_KEY);
+      }
+    } catch {
+      // Silent — gamification is non-critical, don't break auth flow
+    }
+  };
 
   const seedNotifications = (name: string, dest: string) => {
     setNotifications([
@@ -158,6 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     syncStudentData().catch(() => {
       // Keep persisted local auth state if student sync fails.
     });
+    refreshGamification();
   }, [state.isAuthenticated, state.user?.id, state.user?.role]);
 
   const login = async (email: string, password: string) => {
@@ -191,6 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setApiAvailable(true);
       if (role === 'student') {
         await syncStudentData();
+        await refreshGamification();
       }
       return role;
     } catch (err: any) {
@@ -243,18 +295,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (role === 'student') {
       await syncStudentData().catch(() => {});
+      await refreshGamification();
     }
 
     return role;
   };
 
-  const register = async (name: string, email: string, password: string, role: 'student' | 'instructor') => {
+  const register = async (name: string, email: string, password: string, role: 'student' | 'instructor'): Promise<'verification_sent'> => {
     setApiAvailable(false);
     await authApi.register({ name, email, password, role });
     return 'verification_sent';
   };
 
-  const verifyRegistration = async (_name: string, email: string, code: string, _role: 'student' | 'instructor') => {
+  const verifyRegistration = async (_name: string, email: string, code: string, _role: 'student' | 'instructor'): Promise<'student' | 'instructor'> => {
     setApiAvailable(false);
     await authApi.verifyCode(email, code);
     return 'student';
@@ -266,6 +319,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: null, isAuthenticated: false });
     setNotifications([]);
     setTransactions([]);
+    setCoin(0);
+    setTier(null);
+    setLeaderboardPosition(null);
+    localStorage.removeItem(GAMIFICATION_KEY);
+    localStorage.removeItem(LAST_TIER_KEY);
   };
 
   const updateUser = (updates: Partial<User>) => {
@@ -273,7 +331,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...state.user, ...updates };
     setState(prev => ({ ...prev, user: updated }));
     if (apiAvailable) {
-      authApi.updateProfile({ name: updates.name, email: updates.email, bio: updates.bio, avatar: updates.avatar }).catch(() => {});
+      authApi.updateProfile({
+        first_name: updates.name,
+        email: updates.email,
+        avatar: updates.avatar ?? null,
+      }).catch(() => {});
     }
     const users: User[] = load('da_users', []);
     const idx = users.findIndex(u => u.id === state.user!.id);
@@ -311,7 +373,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const markAllNotificationsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   return (
-    <AuthContext.Provider value={{ ...state, apiAvailable, login, authenticateWithTokens, register, verifyRegistration, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
+    <AuthContext.Provider value={{ ...state, apiAvailable, coin, tier, leaderboardPosition, refreshGamification, login, authenticateWithTokens, register, verifyRegistration, logout, updateUser, enrollInCourse, notifications, markNotificationRead, markAllNotificationsRead, transactions }}>
       {children}
     </AuthContext.Provider>
   );

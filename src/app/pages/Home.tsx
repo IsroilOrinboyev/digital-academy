@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/button';
 import { CourseCard } from '../components/CourseCard';
-import { courses, categories } from '../data/courses';
+import { categories } from '../data/courses';
 import { ArrowRight, CheckCircle, GraduationCap, BookOpen, Globe, TrendingUp, DollarSign, Users, BarChart3, Code2, Briefcase, Palette, Camera, Music2, Dumbbell, Sparkles, Tag } from 'lucide-react';
 import { useAuth } from '@/app/store/AuthContext';
 import { categoryApi, courseApi } from '@/app/services/api';
@@ -45,7 +45,7 @@ const categoryColors: Record<string, { bg: string; hover: string; iconBg: string
 export function Home() {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const [homeCourses, setHomeCourses] = useState(courses);
+  const [homeCourses, setHomeCourses] = useState<ReturnType<typeof mapApiCourseToCourse>[]>([]);
   const [homeCategories, setHomeCategories] = useState<HomeCategoryItem[]>(
     categories.map((item) => ({
       id: item.id,
@@ -182,12 +182,12 @@ export function Home() {
       </section>
 
       {/* ── Featured Courses ── */}
-      <section className="py-20">
+      <section className="py-20 dark:bg-slate-950">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
             <div>
               <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">Handpicked for you</p>
-              <h2 className="text-3xl sm:text-4xl font-bold">Featured Courses</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold dark:text-slate-100">Featured Courses</h2>
             </div>
             <Link to="/courses">
               <Button variant="outline" className="gap-2 text-sm">
@@ -204,11 +204,11 @@ export function Home() {
       </section>
 
       {/* ── Categories ── */}
-      <section className="py-20 bg-gray-50/70">
+      <section className="py-20 bg-gray-50/70 dark:bg-slate-900">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
           <div className="text-center mb-10">
               <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">What do you want to learn?</p>
-              <h2 className="text-3xl sm:text-4xl font-bold">Browse Top Categories</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold dark:text-slate-100">Browse Top Categories</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
             {homeCategories.map(category => {
@@ -233,12 +233,12 @@ export function Home() {
       </section>
 
       {/* ── Popular Courses (horizontal scroll) ── */}
-      <section className="py-20">
+      <section className="py-20 dark:bg-slate-950">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
             <div>
               <p className="text-base font-semibold text-purple-600 uppercase tracking-wider mb-1">Trending now</p>
-              <h2 className="text-3xl sm:text-4xl font-bold">Popular Courses</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold dark:text-slate-100">Popular Courses</h2>
             </div>
             <Link to="/courses">
               <Button variant="outline" className="gap-2 text-sm">
@@ -299,9 +299,9 @@ export function Home() {
       </section>
 
       {/* ── Trusted Companies ── */}
-      <section className="py-16 border-t overflow-hidden bg-gray-50/50">
+      <section className="py-16 border-t dark:border-slate-800 overflow-hidden bg-gray-50/50 dark:bg-slate-900">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 xl:px-8">
-          <p className="text-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-10">
+          <p className="text-center text-sm font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-10">
             Trusted by 15,000+ companies and millions of learners worldwide
           </p>
           <div className="relative">

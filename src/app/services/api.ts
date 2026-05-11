@@ -372,6 +372,70 @@ export interface SubmitUserQuizResponse {
   };
 }
 
+// ── Gamification types ─────────────────────────────────────────────────────
+export type Tier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+
+export interface ProfileResponse {
+  id: string;
+  avatar: string | null;
+  email: string | null;
+  first_name: string;
+  last_name: string;
+  username: string | null;
+  coin: number;
+  phone_number: string | null;
+}
+
+export interface ProfileUpdatePayload {
+  avatar?: string | null;
+  email?: string | null;
+  first_name?: string;
+  last_name?: string;
+  username?: string | null;
+  phone_number?: string | null;
+}
+
+export interface LeaderboardEntry {
+  username: string;
+  tier: Tier;
+  total_stars: number;
+  position: number | null;
+  reward_coin: number;
+}
+
+export type LeaderboardListResponse = ReturnType<typeof wrapApiData<LeaderboardEntry[]>>;
+export type QuizResultListResponse = ReturnType<typeof wrapApiData<QuizResultEntry[]>>;
+
+export interface QuizResultEntry {
+  id: string;
+  quiz_title: string;
+  correct_answers: number;
+  wrong_answers: number;
+  total_questions: number;
+  status: 'PASSED' | 'FAILED';
+  stars: number;
+  total: string;
+  attempt: number;
+}
+
+export interface QuizSubmitResultResponseExtended {
+  success: boolean;
+  status: number;
+  data: {
+    quiz: string;
+    user: string | null;
+    correct_answers: number;
+    wrong_answers: number;
+    total_questions: number;
+    total: string;
+    status: 'PASSED' | 'FAILED' | string;
+    course_progress: number;
+    stars?: number;
+    attempt?: number;
+    coin_earned?: number;
+  };
+}
+
 export interface UpdateCoursePayload {
   title: string;
   desc: string;
@@ -470,9 +534,18 @@ export const authApi = {
 
   logout: async () => undefined,
 
-  getProfile: async () => null,
+  getProfile: async () => {
+    const response = await apiRequest<MaybeWrappedResponse<ProfileResponse>>('/api/users/auth/profile/');
+    return unwrapApiData(response, null as ProfileResponse | null);
+  },
 
-  updateProfile: async (data: Partial<{ name: string; email: string; bio: string; avatar: string }>) => data,
+  updateProfile: async (data: ProfileUpdatePayload) => {
+    const response = await apiRequest<MaybeWrappedResponse<ProfileResponse>>('/api/users/auth/profile/', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return unwrapApiData(response, null as ProfileResponse | null);
+  },
 
   changePassword: async (_data: { old_password: string; new_password: string }) => {
     throw new Error('Password change endpoint is not available in current backend auth API.');
@@ -571,7 +644,11 @@ export const courseApi = {
   userCourses: async (params?: UserCoursesQueryParams) => {
     if (!params) {
       const response = await apiRequest<MaybeWrappedResponse<UserPublicCourseItem[]>>('/api/users/courses/');
-      return wrapApiData(response, [] as UserPublicCourseItem[]);
+      const result = wrapApiData(response, [] as UserPublicCourseItem[]);
+      try {
+        localStorage.setItem('da_public_courses_cache', JSON.stringify(result.data));
+      } catch { /* quota exceeded or private browsing — ignore */ }
+      return result;
     }
 
     const query = new URLSearchParams();
@@ -604,7 +681,7 @@ export const courseApi = {
   },
 
   submitUserQuiz: (quizId: string, data: SubmitUserQuizPayload) =>
-    apiRequest<SubmitUserQuizResponse>(`/api/users/quiz/${quizId}/submit/`, {
+    apiRequest<QuizSubmitResultResponseExtended>(`/api/users/quiz/${quizId}/submit/`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -798,5 +875,29 @@ export const orderApi = {
   list: async () => {
     const response = await apiRequest<MaybeWrappedResponse<OrderListItem[]>>('/api/users/enrolment/');
     return wrapApiData(response, [] as OrderListItem[]);
+  },
+};
+
+export const leaderboardApi = {
+  list: async () => {
+    const response = await apiRequest<MaybeWrappedResponse<LeaderboardEntry[]>>('/api/users/leaderboard/');
+    return wrapApiData(response, [] as LeaderboardEntry[]);
+  },
+
+  detail: async (id: string) => {
+    const response = await apiRequest<MaybeWrappedResponse<LeaderboardEntry>>(`/api/users/leaderboard/${id}/`);
+    return unwrapApiData(response, null as LeaderboardEntry | null);
+  },
+};
+
+export const quizResultApi = {
+  list: async () => {
+    const response = await apiRequest<MaybeWrappedResponse<QuizResultEntry[]>>('/api/users/quiz-result/');
+    return wrapApiData(response, [] as QuizResultEntry[]);
+  },
+
+  detail: async (id: string) => {
+    const response = await apiRequest<MaybeWrappedResponse<QuizResultEntry>>(`/api/users/quiz-result/${id}/`);
+    return unwrapApiData(response, null as QuizResultEntry | null);
   },
 };

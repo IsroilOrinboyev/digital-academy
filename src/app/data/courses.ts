@@ -25,7 +25,13 @@ export interface Course {
   bestseller?: boolean;
 }
 
-export const categories = [
+export interface CategoryStub {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+const MOCK_CATEGORIES: CategoryStub[] = [
   { id: 'development', name: 'Development', icon: '💻' },
   { id: 'business', name: 'Business', icon: '💼' },
   { id: 'design', name: 'Design', icon: '🎨' },
@@ -36,7 +42,9 @@ export const categories = [
   { id: 'lifestyle', name: 'Lifestyle', icon: '🌟' },
 ];
 
-export const courses: Course[] = [
+export const categories: CategoryStub[] = import.meta.env.DEV ? MOCK_CATEGORIES : [];
+
+const MOCK_COURSES: Course[] = [
   {
     id: '1',
     title: 'The Complete Web Developer Bootcamp 2026',
@@ -223,3 +231,5 @@ export const courses: Course[] = [
     bestseller: true,
   },
 ];
+
+export const courses: Course[] = import.meta.env.DEV ? MOCK_COURSES : [];
